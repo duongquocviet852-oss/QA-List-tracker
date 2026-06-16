@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="ProjectTrack"/>
+<title>ProjectTrack</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  select { appearance: none; -webkit-appearance: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const SUPA_URL = "https://qqjtkdnwowwaqkxajyaf.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxanRrZG53b3d3YXFreGFqeWFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNDM5NzgsImV4cCI6MjA5NjcxOTk3OH0.4-knwy3c5BCVWJ5ejZqbAh8qSzGx81JGHCQU747J56c";
+const H = {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"Prefer":"return=representation"};
+
+async function dbGet(table, params="") {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?order=created_at.desc${params}`,{headers:H});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function dbInsert(table, body) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`,{method:"POST",headers:H,body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function dbUpdate(table, id, body) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function dbDelete(table, id) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:H});
+  if(!r.ok) throw new Error(await r.text());
+}
+
+const PRIORITIES=["High","Medium","Low"];
+const STATUSES=["New","In Progress","Pending","Done"];
+const TYPES=["Long-term","Short-term"];
+const STATUS_COLOR={"New":"background:#f1f5f9;color:#475569","In Progress":"background:#dbeafe;color:#1d4ed8","Pending":"background:#fef3c7;color:#b45309","Done":"background:#dcfce7;color:#15803d"};
+const PRIORITY_DOT={"High":"#f87171","Medium":"#fbbf24","Low":"#d1d5db"};
+
+function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
+function formatDate(d){if(!d)return"—";return new Date(d).toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric"})}
+function daysLeft(due){if(!due)return null;return Math.ceil((new Date(due)-new Date())/86400000)}
+
+function mapTask(t){return{id:t.id,factoryId:t.factory_id,partner:t.partner||"",title:t.title||"",type:t.type||"Short-term",status:t.status||"New",priority:t.priority||"Medium",owner:t.owner||"",factoryOwner:t.factory_owner||"",startDate:t.start_date||"",dueDate:t.due_date||"",progress:t.progress||0,subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at}}
+function mapFactory(f){return{id:f.id,name:f.name,location:f.location||"",note:f.note||"",createdAt:f.created_at}}
+
+function exportCSV(tasks,factories){
+  const headers=["Factory","Supplier","Title","Type","Status","Priority","Owner","Start","Due","Progress%","Overdue"];
+  const rows=tasks.map(t=>{
+    const fac=factories.find(f=>f.id===t.factoryId)?.name||"";
+    const dl=daysLeft(t.dueDate);
+    const overdue=t.status!=="Done"&&dl!==null&&dl<0?Math.abs(dl)+"d":"";
+    return[fac,t.partner,t.title,t.type,t.status,t.priority,t.owner,t.startDate,t.dueDate,t.progress,overdue].join(",");
+  });
+  const csv=[headers.join(","),...rows].join("\n");
+  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=`tasks_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
+}
+
+const {useState,useEffect}=React;
+
+function Modal({title,onClose,children,footer}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16}}>
+      <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid #f1f5f9"}}>
+          <span style={{fontWeight:600,color:"#1e293b"}}>{title}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,color:"#94a3b8",cursor:"pointer"}}>×</button>
+        </div>
+        <div style={{padding:20}}>{children}</div>
+        {footer&&<div style={{padding:"12px 20px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Input({label,value,onChange,placeholder,type="text",required}){
+  return(
+    <div style={{marginBottom:12}}>
+      <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>{label}{required&&" *"}</label>
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+        style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
+    </div>
+  );
+}
+
+function Select({label,value,onChange,options}){
+  return(
+    <div style={{marginBottom:12}}>
+      <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>{label}</label>
+      <select value={value} onChange={e=>onChange(e.target.value)}
+        style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,background:"white",outline:"none"}}>
+        {options.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Btn({children,onClick,variant="primary",disabled,small}){
+  const styles={
+    primary:{background:"#4f46e5",color:"white",border:"none"},
+    secondary:{background:"white",color:"#64748b",border:"1px solid #e2e8f0"},
+    danger:{background:"white",color:"#ef4444",border:"1px solid #fecaca"},
+  };
+  return(
+    <button onClick={onClick} disabled={disabled}
+      style={{...styles[variant],padding:small?"6px 12px":"8px 16px",borderRadius:8,fontSize:small?12:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1,fontWeight:500}}>
+      {children}
+    </button>
+  );
+}
+
+function FactoryModal({factory,onSave,onClose}){
+  const[name,setName]=useState(factory?.name||"");
+  const[location,setLocation]=useState(factory?.location||"");
+  const[note,setNote]=useState(factory?.note||"");
+  const[saving,setSaving]=useState(false);
+  async function save(){
+    setSaving(true);
+    await onSave({id:factory?.id||uid(),name:name.trim(),location,note});
+    setSaving(false);
+  }
+  return(
+    <Modal title={factory?"Edit factory":"New factory"} onClose={onClose}
+      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!name.trim()||saving}>{saving?"Saving...":"Save"}</Btn></>}>
+      <Input label="Factory name" value={name} onChange={setName} placeholder="Tên nhà máy..." required/>
+      <Input label="Location" value={location} onChange={setLocation} placeholder="Địa điểm..."/>
+      <Input label="Note" value={note} onChange={setNote} placeholder="Ghi chú..."/>
+    </Modal>
+  );
+}
+
+function TaskModal({task,factories,defaultFactoryId,onSave,onClose}){
+  const blank={id:uid(),factoryId:defaultFactoryId||factories[0]?.id||"",partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
+  const[form,setForm]=useState(task?{...task}:blank);
+  const[subInput,setSubInput]=useState("");
+  const[newComment,setNewComment]=useState("");
+  const[tab,setTab]=useState("info");
+  const[saving,setSaving]=useState(false);
+  function set(k,v){setForm(f=>({...f,[k]:v}))}
+  function addSub(){if(!subInput.trim())return;set("subtasks",[...form.subtasks,{id:uid(),text:subInput.trim(),done:false}]);setSubInput("")}
+  function addComment(){if(!newComment.trim())return;set("comments",[...form.comments,{id:uid(),text:newComment.trim(),ts:new Date().toISOString()}]);setNewComment("")}
+  async function save(){setSaving(true);await onSave(form);setSaving(false)}
+  const subDone=form.subtasks.filter(s=>s.done).length;
+  const grid2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12};
+  const grid3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12};
+  return(
+    <Modal title={task?"Edit task":"New task"} onClose={onClose}
+      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!form.factoryId||!form.partner.trim()||!form.title.trim()||saving}>{saving?"Saving...":"Save"}</Btn></>}>
+      <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9",marginBottom:16}}>
+        {[["info","Details"],["log","Log"+(form.comments.length>0?` (${form.comments.length})`:"")]].map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)}
+            style={{padding:"8px 16px",fontSize:13,border:"none",borderBottom:tab===v?"2px solid #4f46e5":"2px solid transparent",color:tab===v?"#4f46e5":"#94a3b8",background:"none",cursor:"pointer",fontWeight:tab===v?600:400}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {tab==="info"&&<>
+        <Select label="Factory *" value={form.factoryId} onChange={v=>set("factoryId",v)}
+          options={[{value:"",label:"— chọn nhà máy —"},...factories.map(f=>({value:f.id,label:f.name}))]}/>
+        <div style={grid2}>
+          <Input label="Supplier / Partner *" value={form.partner} onChange={v=>set("partner",v)} placeholder="Tên supplier..."/>
+          <Input label="Task / Project *" value={form.title} onChange={v=>set("title",v)} placeholder="Mô tả task..."/>
+        </div>
+        <div style={grid3}>
+          <Select label="Type" value={form.type} onChange={v=>set("type",v)} options={TYPES}/>
+          <Select label="Status" value={form.status} onChange={v=>set("status",v)} options={STATUSES}/>
+          <Select label="Priority" value={form.priority} onChange={v=>set("priority",v)} options={PRIORITIES}/>
+        </div>
+        <div style={grid2}>
+          <Input label="Owner (người phụ trách)" value={form.owner} onChange={v=>set("owner",v)} placeholder="Người phụ trách task..."/>
+          <Input label="Factory Owner (người phụ trách NM)" value={form.factoryOwner||""} onChange={v=>set("factoryOwner",v)} placeholder="Người phụ trách nhà máy..."/>
+        </div>
+        <div style={grid3}>
+          <Input label="Start date" type="date" value={form.startDate} onChange={v=>set("startDate",v)}/>
+          <Input label="Due date" type="date" value={form.dueDate} onChange={v=>set("dueDate",v)}/>
+          <Input label="Progress %" type="number" value={form.progress} onChange={v=>set("progress",Number(v))}/>
+        </div>
+        {form.type==="Long-term"&&<>
+          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Sub-tasks {form.subtasks.length>0&&`(${subDone}/${form.subtasks.length})`}</label>
+          {form.subtasks.map(s=>(
+            <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+              <input type="checkbox" checked={s.done} onChange={()=>set("subtasks",form.subtasks.map(x=>x.id===s.id?{...x,done:!x.done}:x))}/>
+              <span style={{flex:1,fontSize:13,textDecoration:s.done?"line-through":"none",color:s.done?"#94a3b8":"#1e293b"}}>{s.text}</span>
+              <button onClick={()=>set("subtasks",form.subtasks.filter(x=>x.id!==s.id))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer"}}>✕</button>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            <input value={subInput} onChange={e=>setSubInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSub()}
+              placeholder="Add sub-task (Enter)" style={{flex:1,border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none"}}/>
+            <Btn small onClick={addSub} variant="secondary">Add</Btn>
+          </div>
+        </>}
+      </>}
+      {tab==="log"&&<>
+        <div style={{maxHeight:200,overflowY:"auto",marginBottom:12}}>
+          {form.comments.length===0
+            ?<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"20px 0"}}>Chưa có comment.</div>
+            :[...form.comments].reverse().map(c=>(
+              <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"8px 12px",marginBottom:8}}>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>{new Date(c.ts).toLocaleString("vi-VN")}</div>
+                <div style={{fontSize:13,color:"#334155"}}>{c.text}</div>
+              </div>
+            ))
+          }
+        </div>
+        <textarea rows={3} value={newComment} onChange={e=>setNewComment(e.target.value)}
+          placeholder="Ghi chú cập nhật..."
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,resize:"none",outline:"none",boxSizing:"border-box"}}/>
+        <div style={{marginTop:8}}><Btn small variant="secondary" onClick={addComment} disabled={!newComment.trim()}>Add comment</Btn></div>
+      </>}
+    </Modal>
+  );
+}
+
+function QuickUpdateModal({task,onSave,onClose}){
+  const[progress,setProgress]=useState(task.progress);
+  const[dueDate,setDueDate]=useState(task.dueDate||"");
+  const[status,setStatus]=useState(task.status);
+  const[note,setNote]=useState("");
+  const[saving,setSaving]=useState(false);
+  async function save(){
+    if(!note.trim())return;
+    setSaving(true);
+    const newComment={id:uid(),text:`[${progress}%] ${note}`,ts:new Date().toISOString(),type:"progress"};
+    const updated={...task,progress,dueDate,status,comments:[...task.comments,newComment]};
+    await onSave(updated);
+    setSaving(false);
+  }
+  return(
+    <Modal title={"+ Update: "+task.title} onClose={onClose}
+      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!note.trim()||saving}>{saving?"Saving...":"Update"}</Btn></>}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:4}}>
+        <div>
+          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Progress %</label>
+          <input type="number" min="0" max="100" value={progress} onChange={e=>setProgress(Number(e.target.value))}
+            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>New due date</label>
+          <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}
+            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Status</label>
+          <select value={status} onChange={e=>setStatus(e.target.value)}
+            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,background:"white",outline:"none"}}>
+            {STATUSES.map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{marginBottom:4}}>
+        <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Update note *</label>
+        <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="Mô tả tiến độ mới nhất, vấn đề, action tiếp theo..."
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,resize:"none",outline:"none",boxSizing:"border-box"}}/>
+      </div>
+      {task.comments.length>0&&<>
+        <div style={{fontSize:11,color:"#94a3b8",marginTop:8,marginBottom:6}}>Previous updates</div>
+        <div style={{maxHeight:140,overflowY:"auto"}}>
+          {[...task.comments].reverse().map(c=>(
+            <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"6px 10px",marginBottom:6,borderLeft:"3px solid #818cf8"}}>
+              <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>{new Date(c.ts).toLocaleString("vi-VN")}</div>
+              <div style={{fontSize:12,color:"#334155"}}>{c.text}</div>
+            </div>
+          ))}
+        </div>
+      </>}
+    </Modal>
+  );
+}
+
+function TaskRow({task,factories,selected,onSelect,onEdit,onDelete,onStatusChange,onQuickUpdate}){
+  const dl=daysLeft(task.dueDate);
+  const isOverdue=task.status!=="Done"&&dl!==null&&dl<0;
+  const isDueSoon=task.status!=="Done"&&dl!==null&&dl>=0&&dl<=7;
+  const fac=factories.find(f=>f.id===task.factoryId);
+  const subDone=task.subtasks.filter(s=>s.done).length;
+  const bg=isOverdue?"#fff5f5":isDueSoon?"#fffbeb":"white";
+  const border=isOverdue?"#fecaca":isDueSoon?"#fde68a":selected?"#a5b4fc":"#f1f5f9";
+  return(
+    <div style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,transition:"box-shadow .15s"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        <input type="checkbox" checked={selected} onChange={e=>onSelect(task.id,e.target.checked)} style={{marginTop:3,accentColor:"#4f46e5"}}/>
+        <select value={task.status} onChange={e=>onStatusChange(task.id,e.target.value)}
+          style={{...Object.fromEntries(STATUS_COLOR[task.status].split(";").map(s=>s.split(":").map(x=>x.trim()))),border:"none",borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",outline:"none"}}>
+          {STATUSES.map(s=><option key={s}>{s}</option>)}
+        </select>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{task.title}</span>
+            <span style={{fontSize:12,color:"#94a3b8"}}>· {task.partner}</span>
+            <span style={{width:7,height:7,borderRadius:"50%",background:PRIORITY_DOT[task.priority],display:"inline-block"}}/>
+            <span style={{fontSize:11,color:"#cbd5e1"}}>{task.type==="Long-term"?"⏳":"⚡"}</span>
+            {task.comments.length>0&&<span style={{fontSize:11,color:"#cbd5e1"}}>💬{task.comments.length}</span>}
+          </div>
+          <div style={{display:"flex",gap:12,marginTop:4,fontSize:11,color:"#94a3b8",flexWrap:"wrap"}}>
+            {fac&&<span style={{color:"#818cf8"}}>🏭 {fac.name}</span>}
+            {task.owner&&<span>👤 {task.owner}</span>}
+            {task.factoryOwner&&<span>🏭👤 {task.factoryOwner}</span>}
+            {task.dueDate&&<span style={{color:isOverdue?"#ef4444":isDueSoon?"#f59e0b":"#94a3b8",fontWeight:isOverdue||isDueSoon?600:400}}>
+              📅 {formatDate(task.dueDate)}{dl!==null&&` · ${isOverdue?Math.abs(dl)+"d overdue":dl===0?"today":dl+"d left"}`}
+            </span>}
+            {task.subtasks.length>0&&<span>☑ {subDone}/{task.subtasks.length}</span>}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+            <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:4}}>
+              <div style={{background:"#818cf8",height:4,borderRadius:4,width:`${task.progress}%`,transition:"width .3s"}}/>
+            </div>
+            <span style={{fontSize:11,color:"#94a3b8",width:28,textAlign:"right"}}>{task.progress}%</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
+          <button onClick={()=>onQuickUpdate(task)}
+            style={{background:"#4f46e5",color:"white",border:"none",borderRadius:8,width:28,height:28,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:300,lineHeight:1}}>+</button>
+          <div style={{display:"flex",gap:4}}>
+            <Btn small variant="secondary" onClick={()=>onEdit(task)}>Edit</Btn>
+            <Btn small variant="danger" onClick={()=>onDelete(task.id)}>Del</Btn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkBar({count,onStatusChange,onClear}){
+  const[status,setStatus]=useState("In Progress");
+  if(count===0)return null;
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:8,background:"#4f46e5",color:"white",borderRadius:12,padding:"10px 16px",marginBottom:12}}>
+      <span style={{fontSize:13,fontWeight:600}}>{count} selected</span>
+      <div style={{flex:1}}/>
+      <select value={status} onChange={e=>setStatus(e.target.value)}
+        style={{background:"#4338ca",border:"none",borderRadius:8,padding:"4px 8px",color:"white",fontSize:12,outline:"none"}}>
+        {STATUSES.map(s=><option key={s}>{s}</option>)}
+      </select>
+      <button onClick={()=>onStatusChange(status)}
+        style={{background:"white",color:"#4f46e5",border:"none",borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Apply</button>
+      <button onClick={onClear} style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:13}}>✕</button>
+    </div>
+  );
+}
+
+function FactoryCard({factory,tasks,onOpen,onEdit,onDelete}){
+  const total=tasks.length,done=tasks.filter(t=>t.status==="Done").length;
+  const inProg=tasks.filter(t=>t.status==="In Progress").length;
+  const overdue=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)<0).length;
+  const dueSoon=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7).length;
+  const rate=total?Math.round((done/total)*100):0;
+  return(
+    <div onClick={()=>onOpen(factory.id)}
+      style={{background:"white",border:`1px solid ${overdue>0?"#fecaca":dueSoon>0?"#fde68a":"#f1f5f9"}`,borderRadius:16,padding:20,cursor:"pointer",transition:"box-shadow .15s"}}
+      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 20px rgba(0,0,0,0.08)"}
+      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{factory.name}</div>
+          {factory.location&&<div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>📍 {factory.location}</div>}
+        </div>
+        <div style={{display:"flex",gap:4}} onClick={e=>e.stopPropagation()}>
+          <Btn small variant="secondary" onClick={()=>onEdit(factory)}>Edit</Btn>
+          <Btn small variant="danger" onClick={()=>onDelete(factory.id)}>Del</Btn>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+        {[["Total",total,"#475569"],["Active",inProg,"#2563eb"],["Done",done,"#16a34a"],["Overdue",overdue,overdue>0?"#dc2626":"#cbd5e1"]].map(([l,v,c])=>(
+          <div key={l} style={{textAlign:"center"}}>
+            <div style={{fontSize:18,fontWeight:700,color:c}}>{v}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+      {dueSoon>0&&<div style={{fontSize:11,color:"#d97706",marginBottom:8}}>⚠ {dueSoon} due within 7 days</div>}
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:6}}>
+          <div style={{background:"#818cf8",height:6,borderRadius:4,width:`${rate}%`}}/>
+        </div>
+        <span style={{fontSize:11,color:"#94a3b8"}}>{rate}%</span>
+      </div>
+      {total===0&&<div style={{fontSize:12,color:"#cbd5e1",textAlign:"center",marginTop:8}}>No tasks yet</div>}
+    </div>
+  );
+}
+
+function KPIBar({tasks}){
+  const total=tasks.length,done=tasks.filter(t=>t.status==="Done").length;
+  const inProg=tasks.filter(t=>t.status==="In Progress").length;
+  const overdue=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)<0).length;
+  const dueSoon=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7).length;
+  const rate=total?Math.round((done/total)*100):0;
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10,marginBottom:20}}>
+      {[["Total",total,"#475569","#f8fafc","#e2e8f0"],["In Progress",inProg,"#1d4ed8","#eff6ff","#bfdbfe"],["Done",done,"#15803d","#f0fdf4","#bbf7d0"],
+        ["Overdue",overdue,overdue>0?"#dc2626":"#cbd5e1",overdue>0?"#fff5f5":"#f8fafc",overdue>0?"#fecaca":"#f1f5f9"],
+        ["Due ≤7d",dueSoon,dueSoon>0?"#d97706":"#cbd5e1",dueSoon>0?"#fffbeb":"#f8fafc",dueSoon>0?"#fde68a":"#f1f5f9"],
+        ["Done %",rate+"%","#4338ca","#eef2ff","#c7d2fe"]
+      ].map(([l,v,tc,bg,border])=>(
+        <div key={l} style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:20,fontWeight:700,color:tc}}>{v}</div>
+          <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{l}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App(){
+  const[factories,setFactories]=useState([]);
+  const[tasks,setTasks]=useState([]);
+  const[view,setView]=useState("dashboard");
+  const[selectedFactory,setSelectedFactory]=useState(null);
+  const[taskModal,setTaskModal]=useState(null);
+  const[factoryModal,setFactoryModal]=useState(null);
+  const[quickUpdateTask,setQuickUpdateTask]=useState(null);
+  const[filterStatus,setFilterStatus]=useState("All");
+  const[filterType,setFilterType]=useState("All");
+  const[search,setSearch]=useState("");
+  const[selectedIds,setSelectedIds]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[error,setError]=useState("");
+
+  async function reload(){
+    try{
+      const[f,t]=await Promise.all([dbGet("factories"),dbGet("tasks")]);
+      setFactories(f.map(mapFactory));setTasks(t.map(mapTask));setError("");
+    }catch(e){setError("DB error: "+e.message);}
+    setLoading(false);
+  }
+  useEffect(()=>{reload();},[]);
+
+  async function handleSaveFactory(f){
+    const exists=factories.find(x=>x.id===f.id);
+    if(exists)await dbUpdate("factories",f.id,{name:f.name,location:f.location,note:f.note});
+    else await dbInsert("factories",{id:f.id,name:f.name,location:f.location,note:f.note});
+    await reload();setFactoryModal(null);
+  }
+  async function handleDeleteFactory(id){
+    if(!confirm("Delete factory and all tasks?"))return;
+    await dbDelete("factories",id);await reload();
+    if(selectedFactory===id)setSelectedFactory(null);
+  }
+  async function handleSaveTask(t){
+    const exists=tasks.find(x=>x.id===t.id);
+    const row={id:t.id,factory_id:t.factoryId,partner:t.partner,title:t.title,type:t.type,status:t.status,priority:t.priority,owner:t.owner,factory_owner:t.factoryOwner||"",start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,subtasks:t.subtasks,comments:t.comments};
+    if(exists)await dbUpdate("tasks",t.id,row);else await dbInsert("tasks",row);
+    await reload();setTaskModal(null);
+  }
+  async function handleDeleteTask(id){
+    if(!confirm("Delete task?"))return;
+    await dbDelete("tasks",id);await reload();
+    setSelectedIds(ids=>ids.filter(i=>i!==id));
+  }
+  async function handleStatusChange(id,status){
+    const progress=status==="Done"?100:tasks.find(t=>t.id===id)?.progress||0;
+    await dbUpdate("tasks",id,{status,progress});
+    setTasks(ts=>ts.map(t=>t.id===id?{...t,status,progress}:t));
+  }
+  async function handleBulkStatus(status){
+    await Promise.all(selectedIds.map(id=>{
+      const progress=status==="Done"?100:tasks.find(t=>t.id===id)?.progress||0;
+      return dbUpdate("tasks",id,{status,progress});
+    }));
+    await reload();setSelectedIds([]);
+  }
+
+  const activeFactory=factories.find(f=>f.id===selectedFactory);
+  const filterFn=t=>{
+    if(filterStatus!=="All"&&t.status!==filterStatus)return false;
+    if(filterType!=="All"&&t.type!==filterType)return false;
+    if(search&&!t.title.toLowerCase().includes(search.toLowerCase())&&!t.partner.toLowerCase().includes(search.toLowerCase()))return false;
+    return true;
+  };
+  const factoryTasks=selectedFactory?tasks.filter(t=>t.factoryId===selectedFactory).filter(filterFn):[];
+  const allFiltered=tasks.filter(filterFn);
+  const overdueAll=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)<0);
+  const dueSoonAll=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7);
+
+  function resetNav(v){setView(v);setSelectedFactory(null);setSelectedIds([]);setSearch("");setFilterStatus("All");setFilterType("All");}
+
+  function FilterBar(){
+    return(
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..."
+          style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 12px",fontSize:13,outline:"none",width:160}}/>
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+          style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 12px",fontSize:13,background:"white",outline:"none"}}>
+          {["All",...STATUSES].map(s=><option key={s}>{s}</option>)}
+        </select>
+        <select value={filterType} onChange={e=>setFilterType(e.target.value)}
+          style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 12px",fontSize:13,background:"white",outline:"none"}}>
+          {["All",...TYPES].map(t=><option key={t}>{t}</option>)}
+        </select>
+      </div>
+    );
+  }
+
+  function TaskList({list}){
+    return list.length===0
+      ?<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px 0"}}>No tasks found.</div>
+      :<div>{list.map(t=><TaskRow key={t.id} task={t} factories={factories} selected={selectedIds.includes(t.id)}
+          onSelect={(id,checked)=>setSelectedIds(ids=>checked?[...ids,id]:ids.filter(i=>i!==id))}
+          onEdit={setTaskModal} onDelete={handleDeleteTask} onStatusChange={handleStatusChange}
+          onQuickUpdate={setQuickUpdateTask}/>)}</div>;
+  }
+
+  const navItems=[["dashboard","📊","Dashboard"],["factories","🏭","Factories"],["projects","📋","All Tasks"],["stats","📈","Stats"]];
+
+  return(
+    <div style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
+      {/* Header */}
+      <div style={{background:"white",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,zIndex:40}}>
+        <div style={{maxWidth:960,margin:"0 auto",padding:"0 16px",display:"flex",alignItems:"center",gap:8,height:52}}>
+          <span style={{fontWeight:800,color:"#4f46e5",fontSize:16,marginRight:4}}>ProjectTrack</span>
+          <div style={{display:"flex",gap:4,flex:1}}>
+            {navItems.map(([v,icon,l])=>(
+              <button key={v} onClick={()=>resetNav(v)}
+                style={{padding:"6px 12px",borderRadius:8,border:"none",fontSize:13,cursor:"pointer",fontWeight:view===v&&!selectedFactory?600:400,
+                  background:view===v&&!selectedFactory?"#4f46e5":"transparent",
+                  color:view===v&&!selectedFactory?"white":"#64748b"}}>
+                {icon} {l}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <Btn small variant="secondary" onClick={()=>exportCSV(tasks,factories)}>↓ CSV</Btn>
+            {view==="factories"&&!selectedFactory&&<Btn small variant="secondary" onClick={()=>setFactoryModal("new")}>+ Factory</Btn>}
+            <Btn small onClick={()=>setTaskModal("new")}>+ New Task</Btn>
+          </div>
+        </div>
+        {selectedFactory&&activeFactory&&(
+          <div style={{maxWidth:960,margin:"0 auto",padding:"0 16px 8px",display:"flex",alignItems:"center",gap:6,fontSize:13}}>
+            <button onClick={()=>{setSelectedFactory(null);setSelectedIds([]);}} style={{color:"#4f46e5",background:"none",border:"none",cursor:"pointer",padding:0}}>Factories</button>
+            <span style={{color:"#cbd5e1"}}>›</span>
+            <span style={{color:"#334155",fontWeight:600}}>{activeFactory.name}</span>
+            {activeFactory.location&&<span style={{color:"#94a3b8"}}>· {activeFactory.location}</span>}
+          </div>
+        )}
+      </div>
+
+      <div style={{maxWidth:960,margin:"0 auto",padding:"20px 16px"}}>
+        {error&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#dc2626"}}>{error}</div>}
+        {loading?(
+          <div style={{textAlign:"center",padding:"80px 0",color:"#94a3b8",fontSize:14}}>⏳ Connecting to database...</div>
+        ):(
+          <>
+            {/* Factory detail */}
+            {selectedFactory&&<>
+              <FilterBar/>
+              <BulkBar count={selectedIds.length} onStatusChange={handleBulkStatus} onClear={()=>setSelectedIds([])}/>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <span style={{fontSize:13,color:"#94a3b8"}}>{factoryTasks.length} tasks</span>
+                <Btn small onClick={()=>setTaskModal("new")}>+ Add task</Btn>
+              </div>
+              <TaskList list={factoryTasks}/>
+            </>}
+
+            {/* Dashboard */}
+            {view==="dashboard"&&!selectedFactory&&<>
+              <KPIBar tasks={tasks}/>
+              {overdueAll.length>0&&(
+                <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
+                  <div style={{fontWeight:600,fontSize:13,color:"#dc2626",marginBottom:8}}>🔴 Overdue ({overdueAll.length})</div>
+                  {overdueAll.map(t=>{const fac=factories.find(f=>f.id===t.factoryId);return(
+                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"3px 0"}}>
+                      <span style={{color:"#dc2626"}}>{t.title} <span style={{color:"#f87171",fontWeight:400}}>· {t.partner}</span></span>
+                      <span style={{color:"#f87171",fontSize:11}}>{fac?.name} · {Math.abs(daysLeft(t.dueDate))}d overdue</span>
+                    </div>
+                  );})}
+                </div>
+              )}
+              {dueSoonAll.length>0&&(
+                <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
+                  <div style={{fontWeight:600,fontSize:13,color:"#d97706",marginBottom:8}}>🟡 Due within 7 days ({dueSoonAll.length})</div>
+                  {dueSoonAll.map(t=>{const fac=factories.find(f=>f.id===t.factoryId);return(
+                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"3px 0"}}>
+                      <span style={{color:"#d97706"}}>{t.title} <span style={{color:"#fbbf24",fontWeight:400}}>· {t.partner}</span></span>
+                      <span style={{color:"#fbbf24",fontSize:11}}>{fac?.name} · {daysLeft(t.dueDate)===0?"today":daysLeft(t.dueDate)+"d left"}</span>
+                    </div>
+                  );})}
+                </div>
+              )}
+              <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:10}}>Recent tasks</div>
+              {tasks.length===0
+                ?<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8"}}>
+                  <div style={{fontSize:40,marginBottom:8}}>🏭</div>
+                  <div style={{fontSize:14}}>Start by adding a <b>Factory</b>, then add tasks.</div>
+                </div>
+                :<><TaskList list={tasks.slice(0,8)}/>
+                  {tasks.length>8&&<button onClick={()=>setView("projects")} style={{width:"100%",textAlign:"center",color:"#4f46e5",fontSize:13,background:"none",border:"none",cursor:"pointer",padding:"12px 0"}}>View all {tasks.length} tasks →</button>}
+                </>
+              }
+            </>}
+
+            {/* Factories */}
+            {view==="factories"&&!selectedFactory&&(
+              factories.length===0
+                ?<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:8}}>🏭</div><div style={{fontSize:14}}>No factories yet. Click <b>+ Factory</b>.</div></div>
+                :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+                  {factories.map(f=><FactoryCard key={f.id} factory={f} tasks={tasks.filter(t=>t.factoryId===f.id)}
+                    onOpen={id=>{setSelectedFactory(id);setSearch("");setFilterStatus("All");setFilterType("All");}}
+                    onEdit={setFactoryModal} onDelete={handleDeleteFactory}/>)}
+                </div>
+            )}
+
+            {/* All Tasks */}
+            {view==="projects"&&!selectedFactory&&<>
+              <FilterBar/>
+              <BulkBar count={selectedIds.length} onStatusChange={handleBulkStatus} onClear={()=>setSelectedIds([])}/>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:10}}>{allFiltered.length} tasks</div>
+              <TaskList list={allFiltered}/>
+            </>}
+
+            {/* Stats */}
+            {view==="stats"&&!selectedFactory&&<>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                <div style={{background:"white",border:"1px solid #f1f5f9",borderRadius:12,padding:16}}>
+                  <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:12}}>By status</div>
+                  {STATUSES.map(s=>{const c=tasks.filter(t=>t.status===s).length;const pct=tasks.length?(c/tasks.length)*100:0;return(
+                    <div key={s} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <span style={{...Object.fromEntries(STATUS_COLOR[s].split(";").map(x=>x.split(":").map(y=>y.trim()))),fontSize:11,borderRadius:20,padding:"2px 8px",width:72,textAlign:"center",display:"inline-block"}}>{s}</span>
+                      <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:8}}>
+                        <div style={{background:"#818cf8",height:8,borderRadius:4,width:`${pct}%`}}/>
+                      </div>
+                      <span style={{fontSize:12,color:"#94a3b8",width:20,textAlign:"right"}}>{c}</span>
+                    </div>
+                  );})}
+                </div>
+                <div style={{background:"white",border:"1px solid #f1f5f9",borderRadius:12,padding:16}}>
+                  <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:12}}>By factory</div>
+                  {factories.length===0?<div style={{fontSize:13,color:"#94a3b8"}}>No data.</div>:factories.map(f=>{
+                    const ft=tasks.filter(t=>t.factoryId===f.id);const done=ft.filter(t=>t.status==="Done").length;const rate=ft.length?Math.round((done/ft.length)*100):0;return(
+                      <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,color:"#334155",width:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</span>
+                        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:8}}>
+                          <div style={{background:"#4ade80",height:8,borderRadius:4,width:`${rate}%`}}/>
+                        </div>
+                        <span style={{fontSize:11,color:"#94a3b8",width:60,textAlign:"right"}}>{done}/{ft.length} · {rate}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{background:"white",border:"1px solid #f1f5f9",borderRadius:12,padding:16}}>
+                <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:16}}>Long-term vs Short-term</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
+                  {TYPES.map(type=>{const items=tasks.filter(t=>t.type===type);const done=items.filter(t=>t.status==="Done").length;const rate=items.length?Math.round((done/items.length)*100):0;return(
+                    <div key={type} style={{textAlign:"center"}}>
+                      <div style={{fontSize:36,fontWeight:800,color:"#4f46e5"}}>{rate}%</div>
+                      <div style={{fontSize:12,color:"#64748b",marginTop:4}}>{type}</div>
+                      <div style={{fontSize:11,color:"#94a3b8"}}>{done}/{items.length} done</div>
+                      <div style={{marginTop:8,background:"#f1f5f9",borderRadius:4,height:8}}>
+                        <div style={{background:"#818cf8",height:8,borderRadius:4,width:`${rate}%`}}/>
+                      </div>
+                    </div>
+                  );})}
+                </div>
+              </div>
+            </>}
+          </>
+        )}
+      </div>
+
+      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} factories={factories} defaultFactoryId={selectedFactory} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
+      {factoryModal&&<FactoryModal factory={factoryModal==="new"?null:factoryModal} onSave={handleSaveFactory} onClose={()=>setFactoryModal(null)}/>}
+      {quickUpdateTask&&<QuickUpdateModal task={quickUpdateTask} onSave={async(updated)=>{await handleSaveTask(updated);setQuickUpdateTask(null);}} onClose={()=>setQuickUpdateTask(null)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
