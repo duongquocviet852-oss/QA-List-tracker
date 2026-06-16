@@ -11,215 +11,191 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-  select { appearance: none; -webkit-appearance: none; }
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+select{appearance:none;-webkit-appearance:none}
+.img-preview{width:100%;max-height:160px;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const SUPA_URL = "https://qqjtkdnwowwaqkxajyaf.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxanRrZG53b3d3YXFreGFqeWFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNDM5NzgsImV4cCI6MjA5NjcxOTk3OH0.4-knwy3c5BCVWJ5ejZqbAh8qSzGx81JGHCQU747J56c";
-const H = {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"Prefer":"return=representation"};
+const SUPA_URL="https://qqjtkdnwowwaqkxajyaf.supabase.co";
+const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxanRrZG53b3d3YXFreGFqeWFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNDM5NzgsImV4cCI6MjA5NjcxOTk3OH0.4-knwy3c5BCVWJ5ejZqbAh8qSzGx81JGHCQU747J56c";
+const H={"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"Prefer":"return=representation"};
 
-async function dbGet(table, params="") {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?order=created_at.desc${params}`,{headers:H});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function dbInsert(table, body) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`,{method:"POST",headers:H,body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function dbUpdate(table, id, body) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function dbDelete(table, id) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:H});
-  if(!r.ok) throw new Error(await r.text());
-}
+async function dbGet(table,params=""){const r=await fetch(`${SUPA_URL}/rest/v1/${table}?order=created_at.desc${params}`,{headers:H});if(!r.ok)throw new Error(await r.text());return r.json()}
+async function dbInsert(table,body){const r=await fetch(`${SUPA_URL}/rest/v1/${table}`,{method:"POST",headers:H,body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json()}
+async function dbUpdate(table,id,body){const r=await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json()}
+async function dbDelete(table,id){const r=await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:H});if(!r.ok)throw new Error(await r.text())}
 
-const PRIORITIES=["High","Medium","Low"];
 const STATUSES=["New","In Progress","Pending","Done"];
+const PRIORITIES=["High","Medium","Low"];
 const TYPES=["Long-term","Short-term"];
-const STATUS_COLOR={"New":"background:#f1f5f9;color:#475569","In Progress":"background:#dbeafe;color:#1d4ed8","Pending":"background:#fef3c7;color:#b45309","Done":"background:#dcfce7;color:#15803d"};
+const CATEGORIES=["4M Machine","4M Method","4M Material","4M Man","Inspection","No doc","QC","Other"];
+const PROCESSES=["Filling","Sealing","QC","Packing","Assembly","Final Inspection","Other"];
+
+const STATUS_COLOR={"New":"#f1f5f9;color:#475569","In Progress":"#dbeafe;color:#1d4ed8","Pending":"#fef3c7;color:#b45309","Done":"#dcfce7;color:#15803d"};
 const PRIORITY_DOT={"High":"#f87171","Medium":"#fbbf24","Low":"#d1d5db"};
 
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
 function formatDate(d){if(!d)return"—";return new Date(d).toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric"})}
 function daysLeft(due){if(!due)return null;return Math.ceil((new Date(due)-new Date())/86400000)}
 
-function mapTask(t){return{id:t.id,factoryId:t.factory_id,partner:t.partner||"",title:t.title||"",type:t.type||"Short-term",status:t.status||"New",priority:t.priority||"Medium",owner:t.owner||"",factoryOwner:t.factory_owner||"",startDate:t.start_date||"",dueDate:t.due_date||"",progress:t.progress||0,subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at}}
-function mapFactory(f){return{id:f.id,name:f.name,location:f.location||"",note:f.note||"",createdAt:f.created_at}}
+function mapSupplier(f){return{id:f.id,name:f.name,location:f.location||"",note:f.note||"",createdAt:f.created_at}}
+function mapTask(t){return{
+  id:t.id,supplierId:t.factory_id,partner:t.partner||"",title:t.title||"",
+  type:t.type||"Short-term",status:t.status||"New",priority:t.priority||"Medium",
+  owner:t.owner||"",factoryOwner:t.factory_owner||"",
+  manufactory:t.manufactory||"",category:t.category||"",issueNo:t.issue_no||"",
+  itemJp:t.item_jp||"",itemEn:t.item_en||"",occurProcess:t.occur_process||"",
+  productName:t.product_name||"",cause:t.cause||"",requestFromCainz:t.request_from_cainz||"",
+  startDate:t.start_date||"",dueDate:t.due_date||"",progress:t.progress||0,
+  subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at
+}}
 
-function exportCSV(tasks,factories){
-  const headers=["Factory","Supplier","Title","Type","Status","Priority","Owner","Start","Due","Progress%","Overdue"];
+function exportCSV(tasks,suppliers){
+  const headers=["Supplier","Manufactory","No","Category","Item EN","Process","Product","Status","Priority","Owner","Deadline","Progress%","Cause"];
   const rows=tasks.map(t=>{
-    const fac=factories.find(f=>f.id===t.factoryId)?.name||"";
-    const dl=daysLeft(t.dueDate);
-    const overdue=t.status!=="Done"&&dl!==null&&dl<0?Math.abs(dl)+"d":"";
-    return[fac,t.partner,t.title,t.type,t.status,t.priority,t.owner,t.startDate,t.dueDate,t.progress,overdue].join(",");
+    const sup=suppliers.find(s=>s.id===t.supplierId)?.name||"";
+    return[sup,t.manufactory,t.issueNo,t.category,t.itemEn,t.occurProcess,t.productName,t.status,t.priority,t.owner,t.dueDate,t.progress,t.cause].join(",");
   });
   const csv=[headers.join(","),...rows].join("\n");
   const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");a.href=url;a.download=`tasks_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
+  const a=document.createElement("a");a.href=url;a.download=`issues_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
 const {useState,useEffect}=React;
 
-function Modal({title,onClose,children,footer}){
+function Modal({title,onClose,children,footer,wide}){
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16}}>
-      <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid #f1f5f9"}}>
-          <span style={{fontWeight:600,color:"#1e293b"}}>{title}</span>
-          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,color:"#94a3b8",cursor:"pointer"}}>×</button>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16,overflowY:"auto"}}>
+      <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:wide?720:580,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"white",zIndex:1}}>
+          <span style={{fontWeight:600,color:"#1e293b",fontSize:14}}>{title}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:"#94a3b8",cursor:"pointer",lineHeight:1}}>×</button>
         </div>
         <div style={{padding:20}}>{children}</div>
-        {footer&&<div style={{padding:"12px 20px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>{footer}</div>}
+        {footer&&<div style={{padding:"12px 20px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8,position:"sticky",bottom:0,background:"white"}}>{footer}</div>}
       </div>
     </div>
   );
 }
 
-function Input({label,value,onChange,placeholder,type="text",required}){
+function Inp({label,value,onChange,placeholder,type="text",required,rows}){
+  const base={width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,boxSizing:"border-box",outline:"none"};
   return(
-    <div style={{marginBottom:12}}>
-      <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>{label}{required&&" *"}</label>
-      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-        style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
+    <div style={{marginBottom:10}}>
+      <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:3}}>{label}{required&&<span style={{color:"#ef4444"}}> *</span>}</label>
+      {rows
+        ?<textarea rows={rows} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{...base,resize:"vertical"}}/>
+        :<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={base}/>
+      }
     </div>
   );
 }
 
-function Select({label,value,onChange,options}){
+function Sel({label,value,onChange,options,required}){
   return(
-    <div style={{marginBottom:12}}>
-      <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>{label}</label>
+    <div style={{marginBottom:10}}>
+      <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:3}}>{label}{required&&<span style={{color:"#ef4444"}}> *</span>}</label>
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,background:"white",outline:"none"}}>
+        style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,background:"white",outline:"none"}}>
         {options.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
       </select>
     </div>
   );
 }
 
-function Btn({children,onClick,variant="primary",disabled,small}){
-  const styles={
+function Btn({children,onClick,variant="primary",disabled,small,fullWidth}){
+  const s={
     primary:{background:"#4f46e5",color:"white",border:"none"},
     secondary:{background:"white",color:"#64748b",border:"1px solid #e2e8f0"},
     danger:{background:"white",color:"#ef4444",border:"1px solid #fecaca"},
+    success:{background:"#16a34a",color:"white",border:"none"},
   };
   return(
     <button onClick={onClick} disabled={disabled}
-      style={{...styles[variant],padding:small?"6px 12px":"8px 16px",borderRadius:8,fontSize:small?12:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1,fontWeight:500}}>
+      style={{...s[variant],padding:small?"5px 10px":"8px 16px",borderRadius:8,fontSize:small?11:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1,fontWeight:500,width:fullWidth?"100%":"auto"}}>
       {children}
     </button>
   );
 }
 
-function FactoryModal({factory,onSave,onClose}){
-  const[name,setName]=useState(factory?.name||"");
-  const[location,setLocation]=useState(factory?.location||"");
-  const[note,setNote]=useState(factory?.note||"");
+function SupplierModal({supplier,onSave,onClose}){
+  const[name,setName]=useState(supplier?.name||"");
+  const[location,setLocation]=useState(supplier?.location||"");
+  const[note,setNote]=useState(supplier?.note||"");
   const[saving,setSaving]=useState(false);
-  async function save(){
-    setSaving(true);
-    await onSave({id:factory?.id||uid(),name:name.trim(),location,note});
-    setSaving(false);
-  }
+  async function save(){setSaving(true);await onSave({id:supplier?.id||uid(),name:name.trim(),location,note});setSaving(false)}
   return(
-    <Modal title={factory?"Edit factory":"New factory"} onClose={onClose}
+    <Modal title={supplier?"Edit supplier":"New supplier"} onClose={onClose}
       footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!name.trim()||saving}>{saving?"Saving...":"Save"}</Btn></>}>
-      <Input label="Factory name" value={name} onChange={setName} placeholder="Tên nhà máy..." required/>
-      <Input label="Location" value={location} onChange={setLocation} placeholder="Địa điểm..."/>
-      <Input label="Note" value={note} onChange={setNote} placeholder="Ghi chú..."/>
+      <Inp label="Supplier name" value={name} onChange={setName} placeholder="Tên supplier..." required/>
+      <Inp label="Location" value={location} onChange={setLocation} placeholder="Địa điểm..."/>
+      <Inp label="Note" value={note} onChange={setNote} placeholder="Ghi chú..."/>
     </Modal>
   );
 }
 
-function TaskModal({task,factories,defaultFactoryId,onSave,onClose}){
-  const blank={id:uid(),factoryId:defaultFactoryId||factories[0]?.id||"",partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
+function TaskModal({task,suppliers,defaultSupplierId,onSave,onClose}){
+  const blank={id:uid(),supplierId:defaultSupplierId||suppliers[0]?.id||"",partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:"",itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
   const[form,setForm]=useState(task?{...task}:blank);
-  const[subInput,setSubInput]=useState("");
-  const[newComment,setNewComment]=useState("");
-  const[tab,setTab]=useState("info");
+  const[tab,setTab]=useState("basic");
   const[saving,setSaving]=useState(false);
   function set(k,v){setForm(f=>({...f,[k]:v}))}
-  function addSub(){if(!subInput.trim())return;set("subtasks",[...form.subtasks,{id:uid(),text:subInput.trim(),done:false}]);setSubInput("")}
-  function addComment(){if(!newComment.trim())return;set("comments",[...form.comments,{id:uid(),text:newComment.trim(),ts:new Date().toISOString()}]);setNewComment("")}
   async function save(){setSaving(true);await onSave(form);setSaving(false)}
-  const subDone=form.subtasks.filter(s=>s.done).length;
-  const grid2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12};
-  const grid3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12};
+  const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:10};
+  const g3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10};
+  const tabs=[["basic","Basic"],["detail","Issue detail"],["people","People & dates"]];
   return(
-    <Modal title={task?"Edit task":"New task"} onClose={onClose}
-      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!form.factoryId||!form.partner.trim()||!form.title.trim()||saving}>{saving?"Saving...":"Save"}</Btn></>}>
+    <Modal title={task?"Edit issue":"New issue"} onClose={onClose} wide
+      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!form.supplierId||!form.title.trim()||saving}>{saving?"Saving...":"Save"}</Btn></>}>
       <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9",marginBottom:16}}>
-        {[["info","Details"],["log","Log"+(form.comments.length>0?` (${form.comments.length})`:"")]].map(([v,l])=>(
+        {tabs.map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)}
             style={{padding:"8px 16px",fontSize:13,border:"none",borderBottom:tab===v?"2px solid #4f46e5":"2px solid transparent",color:tab===v?"#4f46e5":"#94a3b8",background:"none",cursor:"pointer",fontWeight:tab===v?600:400}}>
             {l}
           </button>
         ))}
       </div>
-      {tab==="info"&&<>
-        <Select label="Factory *" value={form.factoryId} onChange={v=>set("factoryId",v)}
-          options={[{value:"",label:"— chọn nhà máy —"},...factories.map(f=>({value:f.id,label:f.name}))]}/>
-        <div style={grid2}>
-          <Input label="Supplier / Partner *" value={form.partner} onChange={v=>set("partner",v)} placeholder="Tên supplier..."/>
-          <Input label="Task / Project *" value={form.title} onChange={v=>set("title",v)} placeholder="Mô tả task..."/>
+      {tab==="basic"&&<>
+        <Sel label="Supplier *" value={form.supplierId} onChange={v=>set("supplierId",v)}
+          options={[{value:"",label:"— chọn supplier —"},...suppliers.map(s=>({value:s.id,label:s.name}))]} required/>
+        <div style={g2}>
+          <Inp label="Manufactory (nhà máy)" value={form.manufactory} onChange={v=>set("manufactory",v)} placeholder="Tên nhà máy..."/>
+          <Inp label="Issue No." value={form.issueNo} onChange={v=>set("issueNo",v)} placeholder="56, 57..."/>
         </div>
-        <div style={grid3}>
-          <Select label="Type" value={form.type} onChange={v=>set("type",v)} options={TYPES}/>
-          <Select label="Status" value={form.status} onChange={v=>set("status",v)} options={STATUSES}/>
-          <Select label="Priority" value={form.priority} onChange={v=>set("priority",v)} options={PRIORITIES}/>
+        <Inp label="Title / Issue description *" value={form.title} onChange={v=>set("title",v)} placeholder="Mô tả vấn đề..." required/>
+        <div style={g3}>
+          <Sel label="Type" value={form.type} onChange={v=>set("type",v)} options={TYPES}/>
+          <Sel label="Status" value={form.status} onChange={v=>set("status",v)} options={STATUSES}/>
+          <Sel label="Priority" value={form.priority} onChange={v=>set("priority",v)} options={PRIORITIES}/>
         </div>
-        <div style={grid2}>
-          <Input label="Owner (người phụ trách)" value={form.owner} onChange={v=>set("owner",v)} placeholder="Người phụ trách task..."/>
-          <Input label="Factory Owner (người phụ trách NM)" value={form.factoryOwner||""} onChange={v=>set("factoryOwner",v)} placeholder="Người phụ trách nhà máy..."/>
-        </div>
-        <div style={grid3}>
-          <Input label="Start date" type="date" value={form.startDate} onChange={v=>set("startDate",v)}/>
-          <Input label="Due date" type="date" value={form.dueDate} onChange={v=>set("dueDate",v)}/>
-          <Input label="Progress %" type="number" value={form.progress} onChange={v=>set("progress",Number(v))}/>
-        </div>
-        {form.type==="Long-term"&&<>
-          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Sub-tasks {form.subtasks.length>0&&`(${subDone}/${form.subtasks.length})`}</label>
-          {form.subtasks.map(s=>(
-            <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-              <input type="checkbox" checked={s.done} onChange={()=>set("subtasks",form.subtasks.map(x=>x.id===s.id?{...x,done:!x.done}:x))}/>
-              <span style={{flex:1,fontSize:13,textDecoration:s.done?"line-through":"none",color:s.done?"#94a3b8":"#1e293b"}}>{s.text}</span>
-              <button onClick={()=>set("subtasks",form.subtasks.filter(x=>x.id!==s.id))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer"}}>✕</button>
-            </div>
-          ))}
-          <div style={{display:"flex",gap:8,marginTop:4}}>
-            <input value={subInput} onChange={e=>setSubInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSub()}
-              placeholder="Add sub-task (Enter)" style={{flex:1,border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none"}}/>
-            <Btn small onClick={addSub} variant="secondary">Add</Btn>
-          </div>
-        </>}
       </>}
-      {tab==="log"&&<>
-        <div style={{maxHeight:200,overflowY:"auto",marginBottom:12}}>
-          {form.comments.length===0
-            ?<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"20px 0"}}>Chưa có comment.</div>
-            :[...form.comments].reverse().map(c=>(
-              <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"8px 12px",marginBottom:8}}>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>{new Date(c.ts).toLocaleString("vi-VN")}</div>
-                <div style={{fontSize:13,color:"#334155"}}>{c.text}</div>
-              </div>
-            ))
-          }
+      {tab==="detail"&&<>
+        <div style={g2}>
+          <Sel label="Category" value={form.category} onChange={v=>set("category",v)} options={["—",...CATEGORIES]}/>
+          <Sel label="Occur process" value={form.occurProcess} onChange={v=>set("occurProcess",v)} options={["—",...PROCESSES]}/>
         </div>
-        <textarea rows={3} value={newComment} onChange={e=>setNewComment(e.target.value)}
-          placeholder="Ghi chú cập nhật..."
-          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,resize:"none",outline:"none",boxSizing:"border-box"}}/>
-        <div style={{marginTop:8}}><Btn small variant="secondary" onClick={addComment} disabled={!newComment.trim()}>Add comment</Btn></div>
+        <div style={g2}>
+          <Inp label="Product name" value={form.productName} onChange={v=>set("productName",v)} placeholder="KusaQuick 500mL..."/>
+          <Inp label="Item (EN)" value={form.itemEn} onChange={v=>set("itemEn",v)} placeholder="English description..."/>
+        </div>
+        <Inp label="Item (JP)" value={form.itemJp} onChange={v=>set("itemJp",v)} placeholder="日本語の説明..."/>
+        <Inp label="Request from Cainz" value={form.requestFromCainz} onChange={v=>set("requestFromCainz",v)} placeholder="Yêu cầu từ Cainz..." rows={3}/>
+        <Inp label="Cause of defect" value={form.cause} onChange={v=>set("cause",v)} placeholder="Nguyên nhân..." rows={2}/>
+      </>}
+      {tab==="people"&&<>
+        <div style={g2}>
+          <Inp label="Owner (người phụ trách task)" value={form.owner} onChange={v=>set("owner",v)} placeholder="Tên người phụ trách..."/>
+          <Inp label="Factory owner (người phụ trách NM)" value={form.factoryOwner} onChange={v=>set("factoryOwner",v)} placeholder="Tên người phụ trách NM..."/>
+        </div>
+        <div style={g3}>
+          <Inp label="Start date" type="date" value={form.startDate} onChange={v=>set("startDate",v)}/>
+          <Inp label="Due date" type="date" value={form.dueDate} onChange={v=>set("dueDate",v)}/>
+          <Inp label="Progress %" type="number" value={form.progress} onChange={v=>set("progress",Number(v))}/>
+        </div>
       </>}
     </Modal>
   );
@@ -230,49 +206,50 @@ function QuickUpdateModal({task,onSave,onClose}){
   const[dueDate,setDueDate]=useState(task.dueDate||"");
   const[status,setStatus]=useState(task.status);
   const[note,setNote]=useState("");
+  const[evidenceUrl,setEvidenceUrl]=useState("");
   const[saving,setSaving]=useState(false);
+  const isImg=url=>url&&(url.includes("drive.google.com")||/\.(jpg|jpeg|png|gif|webp)/i.test(url));
+
   async function save(){
     if(!note.trim())return;
     setSaving(true);
-    const newComment={id:uid(),text:`[${progress}%] ${note}`,ts:new Date().toISOString(),type:"progress"};
+    const newComment={id:uid(),text:note.trim(),progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
     const updated={...task,progress,dueDate,status,comments:[...task.comments,newComment]};
     await onSave(updated);
     setSaving(false);
   }
+  const g3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10};
   return(
-    <Modal title={"+ Update: "+task.title} onClose={onClose}
-      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!note.trim()||saving}>{saving?"Saving...":"Update"}</Btn></>}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:4}}>
-        <div>
-          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Progress %</label>
-          <input type="number" min="0" max="100" value={progress} onChange={e=>setProgress(Number(e.target.value))}
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
-        </div>
-        <div>
-          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>New due date</label>
-          <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
-        </div>
-        <div>
-          <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Status</label>
-          <select value={status} onChange={e=>setStatus(e.target.value)}
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,background:"white",outline:"none"}}>
-            {STATUSES.map(s=><option key={s}>{s}</option>)}
-          </select>
-        </div>
+    <Modal title={"+ Update: "+task.title} onClose={onClose} wide
+      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!note.trim()||saving}>{saving?"Saving...":"Save update"}</Btn></>}>
+      <div style={g3}>
+        <Inp label="Progress %" type="number" value={progress} onChange={v=>setProgress(Number(v))}/>
+        <Inp label="New due date" type="date" value={dueDate} onChange={setDueDate}/>
+        <Sel label="Status" value={status} onChange={setStatus} options={STATUSES}/>
       </div>
-      <div style={{marginBottom:4}}>
-        <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:4}}>Update note *</label>
-        <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="Mô tả tiến độ mới nhất, vấn đề, action tiếp theo..."
-          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:13,resize:"none",outline:"none",boxSizing:"border-box"}}/>
-      </div>
+      <Inp label="Update note *" value={note} onChange={setNote} placeholder="Mô tả tiến độ, action, kết quả..." rows={3}/>
+      <Inp label="Evidence (Google Drive link hoặc URL ảnh)" value={evidenceUrl} onChange={setEvidenceUrl} placeholder="https://drive.google.com/..."/>
+      {evidenceUrl&&(
+        <div style={{marginTop:8,marginBottom:12}}>
+          {isImg(evidenceUrl)
+            ?<img src={evidenceUrl} className="img-preview" alt="evidence" onError={e=>{e.target.style.display="none"}}/>
+            :<a href={evidenceUrl} target="_blank" rel="noreferrer"
+                style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"6px 12px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff"}}>
+                🔗 View evidence
+              </a>
+          }
+        </div>
+      )}
       {task.comments.length>0&&<>
-        <div style={{fontSize:11,color:"#94a3b8",marginTop:8,marginBottom:6}}>Previous updates</div>
-        <div style={{maxHeight:140,overflowY:"auto"}}>
+        <div style={{fontSize:11,color:"#94a3b8",margin:"12px 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Previous updates</div>
+        <div style={{maxHeight:180,overflowY:"auto"}}>
           {[...task.comments].reverse().map(c=>(
-            <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"6px 10px",marginBottom:6,borderLeft:"3px solid #818cf8"}}>
-              <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>{new Date(c.ts).toLocaleString("vi-VN")}</div>
-              <div style={{fontSize:12,color:"#334155"}}>{c.text}</div>
+            <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px",marginBottom:6,borderLeft:"3px solid #818cf8"}}>
+              <div style={{fontSize:10,color:"#94a3b8",marginBottom:3}}>{new Date(c.ts).toLocaleString("vi-VN")} · {c.progress}% · {c.status}</div>
+              <div style={{fontSize:12,color:"#334155",lineHeight:1.5}}>{c.text}</div>
+              {c.evidenceUrl&&(
+                <a href={c.evidenceUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#4f46e5",marginTop:4,display:"inline-block"}}>🔗 Evidence</a>
+              )}
             </div>
           ))}
         </div>
@@ -281,52 +258,165 @@ function QuickUpdateModal({task,onSave,onClose}){
   );
 }
 
-function TaskRow({task,factories,selected,onSelect,onEdit,onDelete,onStatusChange,onQuickUpdate}){
+function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate}){
+  const sup=suppliers.find(s=>s.id===task.supplierId);
+  const dl=daysLeft(task.dueDate);
+  const isOverdue=task.status!=="Done"&&dl!==null&&dl<0;
+  return(
+    <Modal title={`#${task.issueNo||"—"} · ${task.title}`} onClose={onClose} wide
+      footer={
+        <div style={{display:"flex",gap:8,width:"100%"}}>
+          <Btn variant="secondary" onClick={onClose}>Close</Btn>
+          <div style={{flex:1}}/>
+          <Btn variant="secondary" onClick={()=>{onClose();onEdit(task)}}>Edit</Btn>
+          <Btn onClick={()=>{onClose();onQuickUpdate(task)}}>+ Add update</Btn>
+        </div>
+      }>
+      {/* Header info */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+        {[
+          ["Supplier",sup?.name||"—"],
+          ["Manufactory",task.manufactory||"—"],
+          ["Category",task.category||"—"],
+          ["Occur process",task.occurProcess||"—"],
+          ["Product",task.productName||"—"],
+          ["Priority",task.priority],
+        ].map(([l,v])=>(
+          <div key={l} style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}>
+            <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>{l}</div>
+            <div style={{fontSize:12,color:"#1e293b",fontWeight:500}}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* People & dates */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:14}}>
+        {[
+          ["Owner",task.owner||"—"],
+          ["Factory owner",task.factoryOwner||"—"],
+          ["Due date",task.dueDate?`${formatDate(task.dueDate)}${dl!==null?` (${isOverdue?Math.abs(dl)+"d overdue":dl+"d left"})`:""}` :"—"],
+          ["Progress",task.progress+"%"],
+        ].map(([l,v])=>(
+          <div key={l} style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}>
+            <div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>{l}</div>
+            <div style={{fontSize:12,color:l==="Due date"&&isOverdue?"#ef4444":"#1e293b",fontWeight:500}}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress bar */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:6}}>
+          <div style={{background:"#818cf8",height:6,borderRadius:4,width:`${task.progress}%`,transition:"width .3s"}}/>
+        </div>
+        <span style={{fontSize:11,color:"#94a3b8"}}>{task.progress}%</span>
+      </div>
+
+      {/* Item JP/EN */}
+      {(task.itemEn||task.itemJp)&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+          {task.itemEn&&<div style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Item (EN)</div><div style={{fontSize:12,color:"#1e293b"}}>{task.itemEn}</div></div>}
+          {task.itemJp&&<div style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Item (JP)</div><div style={{fontSize:12,color:"#1e293b"}}>{task.itemJp}</div></div>}
+        </div>
+      )}
+
+      {/* Request from Cainz */}
+      {task.requestFromCainz&&(
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Request from Cainz</div>
+          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1e3a8a",lineHeight:1.6}}>{task.requestFromCainz}</div>
+        </div>
+      )}
+
+      {/* Cause */}
+      {task.cause&&(
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Cause of defect</div>
+          <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#991b1b",lineHeight:1.6}}>{task.cause}</div>
+        </div>
+      )}
+
+      {/* Progress timeline */}
+      <div style={{fontSize:11,color:"#94a3b8",marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Progress timeline</div>
+      {task.comments.length===0
+        ?<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"16px 0"}}>No updates yet. Click "+ Add update" to start tracking.</div>
+        :<div style={{position:"relative",paddingLeft:18}}>
+          {[...task.comments].reverse().map((c,i)=>(
+            <div key={c.id} style={{position:"relative",marginBottom:12}}>
+              <div style={{position:"absolute",left:-14,top:5,width:8,height:8,borderRadius:"50%",background:"#818cf8",border:"2px solid white",boxShadow:"0 0 0 2px #818cf8"}}/>
+              {i<task.comments.length-1&&<div style={{position:"absolute",left:-11,top:13,width:2,height:"calc(100% + 4px)",background:"#e2e8f0"}}/>}
+              <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,color:"#94a3b8"}}>{new Date(c.ts).toLocaleString("vi-VN")}</span>
+                  <span style={{fontSize:10,background:"#eef2ff",color:"#4f46e5",padding:"1px 6px",borderRadius:20}}>{c.progress}%</span>
+                  <span style={{fontSize:10,background:c.status==="Done"?"#dcfce7":c.status==="In Progress"?"#dbeafe":"#f1f5f9",color:c.status==="Done"?"#15803d":c.status==="In Progress"?"#1d4ed8":"#475569",padding:"1px 6px",borderRadius:20}}>{c.status}</span>
+                </div>
+                <div style={{fontSize:13,color:"#334155",lineHeight:1.6,marginBottom:c.evidenceUrl?8:0}}>{c.text}</div>
+                {c.evidenceUrl&&(
+                  <div style={{marginTop:6}}>
+                    {/\.(jpg|jpeg|png|gif|webp)/i.test(c.evidenceUrl)
+                      ?<img src={c.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:120}} onError={e=>{e.target.style.display="none"}}/>
+                      :<a href={c.evidenceUrl} target="_blank" rel="noreferrer"
+                          style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"5px 10px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff",textDecoration:"none"}}>
+                          🔗 View evidence
+                        </a>
+                    }
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+    </Modal>
+  );
+}
+
+function IssueRow({task,suppliers,onView,onEdit,onDelete,onStatusChange,onQuickUpdate,selected,onSelect}){
   const dl=daysLeft(task.dueDate);
   const isOverdue=task.status!=="Done"&&dl!==null&&dl<0;
   const isDueSoon=task.status!=="Done"&&dl!==null&&dl>=0&&dl<=7;
-  const fac=factories.find(f=>f.id===task.factoryId);
-  const subDone=task.subtasks.filter(s=>s.done).length;
+  const sup=suppliers.find(s=>s.id===task.supplierId);
   const bg=isOverdue?"#fff5f5":isDueSoon?"#fffbeb":"white";
   const border=isOverdue?"#fecaca":isDueSoon?"#fde68a":selected?"#a5b4fc":"#f1f5f9";
   return(
-    <div style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,transition:"box-shadow .15s"}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        <input type="checkbox" checked={selected} onChange={e=>onSelect(task.id,e.target.checked)} style={{marginTop:3,accentColor:"#4f46e5"}}/>
-        <select value={task.status} onChange={e=>onStatusChange(task.id,e.target.value)}
-          style={{...Object.fromEntries(STATUS_COLOR[task.status].split(";").map(s=>s.split(":").map(x=>x.trim()))),border:"none",borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",outline:"none"}}>
+    <div style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"10px 12px",marginBottom:6,cursor:"pointer"}}
+      onClick={()=>onView(task)}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <input type="checkbox" checked={selected} onChange={e=>{e.stopPropagation();onSelect(task.id,e.target.checked)}} style={{accentColor:"#4f46e5",flexShrink:0}} onClick={e=>e.stopPropagation()}/>
+        <select value={task.status} onChange={e=>{e.stopPropagation();onStatusChange(task.id,e.target.value)}} onClick={e=>e.stopPropagation()}
+          style={{...Object.fromEntries(STATUS_COLOR[task.status].split(";").map(s=>s.split(":").map(x=>x.trim()))),border:"none",borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",outline:"none",flexShrink:0}}>
           {STATUSES.map(s=><option key={s}>{s}</option>)}
         </select>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{task.title}</span>
-            <span style={{fontSize:12,color:"#94a3b8"}}>· {task.partner}</span>
-            <span style={{width:7,height:7,borderRadius:"50%",background:PRIORITY_DOT[task.priority],display:"inline-block"}}/>
-            <span style={{fontSize:11,color:"#cbd5e1"}}>{task.type==="Long-term"?"⏳":"⚡"}</span>
-            {task.comments.length>0&&<span style={{fontSize:11,color:"#cbd5e1"}}>💬{task.comments.length}</span>}
+            {task.issueNo&&<span style={{fontSize:10,background:"#f1f5f9",color:"#64748b",padding:"1px 6px",borderRadius:20,flexShrink:0}}>#{task.issueNo}</span>}
+            <span style={{fontWeight:600,fontSize:13,color:"#1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.title}</span>
+            {task.category&&<span style={{fontSize:10,background:"#f8fafc",color:"#64748b",padding:"1px 6px",borderRadius:20,flexShrink:0}}>{task.category}</span>}
+            <span style={{width:7,height:7,borderRadius:"50%",background:PRIORITY_DOT[task.priority],display:"inline-block",flexShrink:0}}/>
           </div>
-          <div style={{display:"flex",gap:12,marginTop:4,fontSize:11,color:"#94a3b8",flexWrap:"wrap"}}>
-            {fac&&<span style={{color:"#818cf8"}}>🏭 {fac.name}</span>}
+          <div style={{display:"flex",gap:10,marginTop:3,fontSize:11,color:"#94a3b8",flexWrap:"wrap"}}>
+            {sup&&<span style={{color:"#818cf8"}}>🏢 {sup.name}</span>}
+            {task.manufactory&&<span>🏭 {task.manufactory}</span>}
             {task.owner&&<span>👤 {task.owner}</span>}
-            {task.factoryOwner&&<span>🏭👤 {task.factoryOwner}</span>}
             {task.dueDate&&<span style={{color:isOverdue?"#ef4444":isDueSoon?"#f59e0b":"#94a3b8",fontWeight:isOverdue||isDueSoon?600:400}}>
               📅 {formatDate(task.dueDate)}{dl!==null&&` · ${isOverdue?Math.abs(dl)+"d overdue":dl===0?"today":dl+"d left"}`}
             </span>}
-            {task.subtasks.length>0&&<span>☑ {subDone}/{task.subtasks.length}</span>}
+            {task.comments.length>0&&<span>💬 {task.comments.length}</span>}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
-            <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:4}}>
-              <div style={{background:"#818cf8",height:4,borderRadius:4,width:`${task.progress}%`,transition:"width .3s"}}/>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5}}>
+            <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:3}}>
+              <div style={{background:"#818cf8",height:3,borderRadius:4,width:`${task.progress}%`}}/>
             </div>
-            <span style={{fontSize:11,color:"#94a3b8",width:28,textAlign:"right"}}>{task.progress}%</span>
+            <span style={{fontSize:10,color:"#94a3b8",width:26,textAlign:"right"}}>{task.progress}%</span>
           </div>
         </div>
-        <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}} onClick={e=>e.stopPropagation()}>
           <button onClick={()=>onQuickUpdate(task)}
-            style={{background:"#4f46e5",color:"white",border:"none",borderRadius:8,width:28,height:28,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:300,lineHeight:1}}>+</button>
-          <div style={{display:"flex",gap:4}}>
-            <Btn small variant="secondary" onClick={()=>onEdit(task)}>Edit</Btn>
-            <Btn small variant="danger" onClick={()=>onDelete(task.id)}>Del</Btn>
+            style={{background:"#4f46e5",color:"white",border:"none",borderRadius:8,width:26,height:26,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:300}}>+</button>
+          <div style={{display:"flex",gap:3}}>
+            <button onClick={()=>onEdit(task)} style={{fontSize:10,color:"#94a3b8",background:"white",border:"1px solid #e2e8f0",borderRadius:6,padding:"2px 7px",cursor:"pointer"}}>Edit</button>
+            <button onClick={()=>onDelete(task.id)} style={{fontSize:10,color:"#ef4444",background:"white",border:"1px solid #fecaca",borderRadius:6,padding:"2px 7px",cursor:"pointer"}}>Del</button>
           </div>
         </div>
       </div>
@@ -338,43 +428,42 @@ function BulkBar({count,onStatusChange,onClear}){
   const[status,setStatus]=useState("In Progress");
   if(count===0)return null;
   return(
-    <div style={{display:"flex",alignItems:"center",gap:8,background:"#4f46e5",color:"white",borderRadius:12,padding:"10px 16px",marginBottom:12}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,background:"#4f46e5",color:"white",borderRadius:12,padding:"10px 14px",marginBottom:10}}>
       <span style={{fontSize:13,fontWeight:600}}>{count} selected</span>
       <div style={{flex:1}}/>
       <select value={status} onChange={e=>setStatus(e.target.value)}
         style={{background:"#4338ca",border:"none",borderRadius:8,padding:"4px 8px",color:"white",fontSize:12,outline:"none"}}>
         {STATUSES.map(s=><option key={s}>{s}</option>)}
       </select>
-      <button onClick={()=>onStatusChange(status)}
-        style={{background:"white",color:"#4f46e5",border:"none",borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Apply</button>
-      <button onClick={onClear} style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:13}}>✕</button>
+      <button onClick={()=>onStatusChange(status)} style={{background:"white",color:"#4f46e5",border:"none",borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Apply</button>
+      <button onClick={onClear} style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:14}}>✕</button>
     </div>
   );
 }
 
-function FactoryCard({factory,tasks,onOpen,onEdit,onDelete}){
-  const total=tasks.length,done=tasks.filter(t=>t.status==="Done").length;
-  const inProg=tasks.filter(t=>t.status==="In Progress").length;
-  const overdue=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)<0).length;
-  const dueSoon=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7).length;
-  const rate=total?Math.round((done/total)*100):0;
+function SupplierCard({supplier,tasks,onOpen,onEdit,onDelete}){
+  const active=tasks.filter(t=>t.status!=="Done");
+  const done=tasks.filter(t=>t.status==="Done").length;
+  const overdue=active.filter(t=>t.dueDate&&daysLeft(t.dueDate)<0).length;
+  const dueSoon=active.filter(t=>t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7).length;
+  const rate=tasks.length?Math.round((done/tasks.length)*100):0;
   return(
-    <div onClick={()=>onOpen(factory.id)}
-      style={{background:"white",border:`1px solid ${overdue>0?"#fecaca":dueSoon>0?"#fde68a":"#f1f5f9"}`,borderRadius:16,padding:20,cursor:"pointer",transition:"box-shadow .15s"}}
+    <div onClick={()=>onOpen(supplier.id)}
+      style={{background:"white",border:`1px solid ${overdue>0?"#fecaca":dueSoon>0?"#fde68a":"#f1f5f9"}`,borderRadius:16,padding:18,cursor:"pointer"}}
       onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 20px rgba(0,0,0,0.08)"}
       onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
-          <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{factory.name}</div>
-          {factory.location&&<div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>📍 {factory.location}</div>}
+          <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{supplier.name}</div>
+          {supplier.location&&<div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>📍 {supplier.location}</div>}
         </div>
         <div style={{display:"flex",gap:4}} onClick={e=>e.stopPropagation()}>
-          <Btn small variant="secondary" onClick={()=>onEdit(factory)}>Edit</Btn>
-          <Btn small variant="danger" onClick={()=>onDelete(factory.id)}>Del</Btn>
+          <button onClick={()=>onEdit(supplier)} style={{fontSize:11,color:"#94a3b8",background:"white",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:"pointer"}}>Edit</button>
+          <button onClick={()=>onDelete(supplier.id)} style={{fontSize:11,color:"#ef4444",background:"white",border:"1px solid #fecaca",borderRadius:6,padding:"3px 8px",cursor:"pointer"}}>Del</button>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
-        {[["Total",total,"#475569"],["Active",inProg,"#2563eb"],["Done",done,"#16a34a"],["Overdue",overdue,overdue>0?"#dc2626":"#cbd5e1"]].map(([l,v,c])=>(
+        {[["Total",tasks.length,"#475569"],["Active",active.length,"#2563eb"],["Done",done,"#16a34a"],["Overdue",overdue,overdue>0?"#dc2626":"#cbd5e1"]].map(([l,v,c])=>(
           <div key={l} style={{textAlign:"center"}}>
             <div style={{fontSize:18,fontWeight:700,color:c}}>{v}</div>
             <div style={{fontSize:11,color:"#94a3b8"}}>{l}</div>
@@ -388,25 +477,27 @@ function FactoryCard({factory,tasks,onOpen,onEdit,onDelete}){
         </div>
         <span style={{fontSize:11,color:"#94a3b8"}}>{rate}%</span>
       </div>
-      {total===0&&<div style={{fontSize:12,color:"#cbd5e1",textAlign:"center",marginTop:8}}>No tasks yet</div>}
     </div>
   );
 }
 
 function KPIBar({tasks}){
-  const total=tasks.length,done=tasks.filter(t=>t.status==="Done").length;
+  const active=tasks.filter(t=>t.status!=="Done");
+  const done=tasks.filter(t=>t.status==="Done").length;
   const inProg=tasks.filter(t=>t.status==="In Progress").length;
-  const overdue=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)<0).length;
-  const dueSoon=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7).length;
-  const rate=total?Math.round((done/total)*100):0;
+  const overdue=active.filter(t=>t.dueDate&&daysLeft(t.dueDate)<0).length;
+  const dueSoon=active.filter(t=>t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7).length;
+  const rate=tasks.length?Math.round((done/tasks.length)*100):0;
   return(
     <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10,marginBottom:20}}>
-      {[["Total",total,"#475569","#f8fafc","#e2e8f0"],["In Progress",inProg,"#1d4ed8","#eff6ff","#bfdbfe"],["Done",done,"#15803d","#f0fdf4","#bbf7d0"],
+      {[["Total",tasks.length,"#475569","#f8fafc","#e2e8f0"],
+        ["Active",active.length,"#1d4ed8","#eff6ff","#bfdbfe"],
+        ["Done",done,"#15803d","#f0fdf4","#bbf7d0"],
         ["Overdue",overdue,overdue>0?"#dc2626":"#cbd5e1",overdue>0?"#fff5f5":"#f8fafc",overdue>0?"#fecaca":"#f1f5f9"],
         ["Due ≤7d",dueSoon,dueSoon>0?"#d97706":"#cbd5e1",dueSoon>0?"#fffbeb":"#f8fafc",dueSoon>0?"#fde68a":"#f1f5f9"],
-        ["Done %",rate+"%","#4338ca","#eef2ff","#c7d2fe"]
+        ["Done %",rate+"%","#4338ca","#eef2ff","#c7d2fe"],
       ].map(([l,v,tc,bg,border])=>(
-        <div key={l} style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"12px 14px"}}>
+        <div key={l} style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"10px 12px"}}>
           <div style={{fontSize:20,fontWeight:700,color:tc}}>{v}</div>
           <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{l}</div>
         </div>
@@ -415,14 +506,15 @@ function KPIBar({tasks}){
   );
 }
 
-function App(){
-  const[factories,setFactories]=useState([]);
+export default function App(){
+  const[suppliers,setSuppliers]=useState([]);
   const[tasks,setTasks]=useState([]);
   const[view,setView]=useState("dashboard");
-  const[selectedFactory,setSelectedFactory]=useState(null);
+  const[selectedSupplier,setSelectedSupplier]=useState(null);
   const[taskModal,setTaskModal]=useState(null);
-  const[factoryModal,setFactoryModal]=useState(null);
+  const[supplierModal,setSupplierModal]=useState(null);
   const[quickUpdateTask,setQuickUpdateTask]=useState(null);
+  const[viewTask,setViewTask]=useState(null);
   const[filterStatus,setFilterStatus]=useState("All");
   const[filterType,setFilterType]=useState("All");
   const[search,setSearch]=useState("");
@@ -433,31 +525,35 @@ function App(){
   async function reload(){
     try{
       const[f,t]=await Promise.all([dbGet("factories"),dbGet("tasks")]);
-      setFactories(f.map(mapFactory));setTasks(t.map(mapTask));setError("");
+      setSuppliers(f.map(mapSupplier));setTasks(t.map(mapTask));setError("");
     }catch(e){setError("DB error: "+e.message);}
     setLoading(false);
   }
   useEffect(()=>{reload();},[]);
 
-  async function handleSaveFactory(f){
-    const exists=factories.find(x=>x.id===f.id);
-    if(exists)await dbUpdate("factories",f.id,{name:f.name,location:f.location,note:f.note});
-    else await dbInsert("factories",{id:f.id,name:f.name,location:f.location,note:f.note});
-    await reload();setFactoryModal(null);
+  async function handleSaveSupplier(s){
+    const exists=suppliers.find(x=>x.id===s.id);
+    if(exists)await dbUpdate("factories",s.id,{name:s.name,location:s.location,note:s.note});
+    else await dbInsert("factories",{id:s.id,name:s.name,location:s.location,note:s.note});
+    await reload();setSupplierModal(null);
   }
-  async function handleDeleteFactory(id){
-    if(!confirm("Delete factory and all tasks?"))return;
+  async function handleDeleteSupplier(id){
+    if(!confirm("Delete supplier and all issues?"))return;
     await dbDelete("factories",id);await reload();
-    if(selectedFactory===id)setSelectedFactory(null);
+    if(selectedSupplier===id)setSelectedSupplier(null);
   }
   async function handleSaveTask(t){
     const exists=tasks.find(x=>x.id===t.id);
-    const row={id:t.id,factory_id:t.factoryId,partner:t.partner,title:t.title,type:t.type,status:t.status,priority:t.priority,owner:t.owner,factory_owner:t.factoryOwner||"",start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,subtasks:t.subtasks,comments:t.comments};
+    const row={id:t.id,factory_id:t.supplierId,partner:t.partner,title:t.title,type:t.type,status:t.status,priority:t.priority,
+      owner:t.owner,factory_owner:t.factoryOwner||"",manufactory:t.manufactory||"",category:t.category||"",
+      issue_no:t.issueNo||"",item_jp:t.itemJp||"",item_en:t.itemEn||"",occur_process:t.occurProcess||"",
+      product_name:t.productName||"",cause:t.cause||"",request_from_cainz:t.requestFromCainz||"",
+      start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,subtasks:t.subtasks,comments:t.comments};
     if(exists)await dbUpdate("tasks",t.id,row);else await dbInsert("tasks",row);
     await reload();setTaskModal(null);
   }
   async function handleDeleteTask(id){
-    if(!confirm("Delete task?"))return;
+    if(!confirm("Delete this issue?"))return;
     await dbDelete("tasks",id);await reload();
     setSelectedIds(ids=>ids.filter(i=>i!==id));
   }
@@ -474,23 +570,27 @@ function App(){
     await reload();setSelectedIds([]);
   }
 
-  const activeFactory=factories.find(f=>f.id===selectedFactory);
+  const activeSupplier=suppliers.find(s=>s.id===selectedSupplier);
   const filterFn=t=>{
     if(filterStatus!=="All"&&t.status!==filterStatus)return false;
     if(filterType!=="All"&&t.type!==filterType)return false;
-    if(search&&!t.title.toLowerCase().includes(search.toLowerCase())&&!t.partner.toLowerCase().includes(search.toLowerCase()))return false;
+    if(search&&!t.title.toLowerCase().includes(search.toLowerCase())&&
+       !t.issueNo.toLowerCase().includes(search.toLowerCase())&&
+       !t.itemEn.toLowerCase().includes(search.toLowerCase())&&
+       !t.partner.toLowerCase().includes(search.toLowerCase()))return false;
     return true;
   };
-  const factoryTasks=selectedFactory?tasks.filter(t=>t.factoryId===selectedFactory).filter(filterFn):[];
-  const allFiltered=tasks.filter(filterFn);
-  const overdueAll=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)<0);
-  const dueSoonAll=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7);
 
-  function resetNav(v){setView(v);setSelectedFactory(null);setSelectedIds([]);setSearch("");setFilterStatus("All");setFilterType("All");}
+  // Dashboard: only non-Done tasks
+  const activeTasks=tasks.filter(t=>t.status!=="Done");
+  const supplierTasks=selectedSupplier?tasks.filter(t=>t.supplierId===selectedSupplier).filter(filterFn):[];
+  const allFiltered=tasks.filter(filterFn);
+  const overdueAll=activeTasks.filter(t=>t.dueDate&&daysLeft(t.dueDate)<0);
+  const dueSoonAll=activeTasks.filter(t=>t.dueDate&&daysLeft(t.dueDate)>=0&&daysLeft(t.dueDate)<=7);
 
   function FilterBar(){
     return(
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..."
           style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 12px",fontSize:13,outline:"none",width:160}}/>
         <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
@@ -505,147 +605,144 @@ function App(){
     );
   }
 
-  function TaskList({list}){
+  function IssueList({list}){
     return list.length===0
-      ?<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px 0"}}>No tasks found.</div>
-      :<div>{list.map(t=><TaskRow key={t.id} task={t} factories={factories} selected={selectedIds.includes(t.id)}
+      ?<div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px 0"}}>No issues found.</div>
+      :<div>{list.map(t=><IssueRow key={t.id} task={t} suppliers={suppliers}
+          selected={selectedIds.includes(t.id)}
           onSelect={(id,checked)=>setSelectedIds(ids=>checked?[...ids,id]:ids.filter(i=>i!==id))}
-          onEdit={setTaskModal} onDelete={handleDeleteTask} onStatusChange={handleStatusChange}
-          onQuickUpdate={setQuickUpdateTask}/>)}</div>;
+          onView={setViewTask} onEdit={setTaskModal} onDelete={handleDeleteTask}
+          onStatusChange={handleStatusChange} onQuickUpdate={setQuickUpdateTask}/>)}</div>;
   }
 
-  const navItems=[["dashboard","📊","Dashboard"],["factories","🏭","Factories"],["projects","📋","All Tasks"],["stats","📈","Stats"]];
+  function resetNav(v){setView(v);setSelectedSupplier(null);setSelectedIds([]);setSearch("");setFilterStatus("All");setFilterType("All");}
 
   return(
     <div style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
       {/* Header */}
       <div style={{background:"white",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,zIndex:40}}>
-        <div style={{maxWidth:960,margin:"0 auto",padding:"0 16px",display:"flex",alignItems:"center",gap:8,height:52}}>
-          <span style={{fontWeight:800,color:"#4f46e5",fontSize:16,marginRight:4}}>ProjectTrack</span>
-          <div style={{display:"flex",gap:4,flex:1}}>
-            {navItems.map(([v,icon,l])=>(
+        <div style={{maxWidth:980,margin:"0 auto",padding:"0 16px",display:"flex",alignItems:"center",gap:6,height:50}}>
+          <span style={{fontWeight:800,color:"#4f46e5",fontSize:15,marginRight:6}}>ProjectTrack</span>
+          <div style={{display:"flex",gap:2,flex:1}}>
+            {[["dashboard","Dashboard"],["suppliers","Suppliers"],["issues","All Issues"],["stats","Stats"]].map(([v,l])=>(
               <button key={v} onClick={()=>resetNav(v)}
-                style={{padding:"6px 12px",borderRadius:8,border:"none",fontSize:13,cursor:"pointer",fontWeight:view===v&&!selectedFactory?600:400,
-                  background:view===v&&!selectedFactory?"#4f46e5":"transparent",
-                  color:view===v&&!selectedFactory?"white":"#64748b"}}>
-                {icon} {l}
+                style={{padding:"5px 12px",borderRadius:8,border:"none",fontSize:13,cursor:"pointer",fontWeight:view===v&&!selectedSupplier?600:400,
+                  background:view===v&&!selectedSupplier?"#4f46e5":"transparent",
+                  color:view===v&&!selectedSupplier?"white":"#64748b"}}>
+                {l}
               </button>
             ))}
           </div>
           <div style={{display:"flex",gap:6}}>
-            <Btn small variant="secondary" onClick={()=>exportCSV(tasks,factories)}>↓ CSV</Btn>
-            {view==="factories"&&!selectedFactory&&<Btn small variant="secondary" onClick={()=>setFactoryModal("new")}>+ Factory</Btn>}
-            <Btn small onClick={()=>setTaskModal("new")}>+ New Task</Btn>
+            <button onClick={()=>exportCSV(tasks,suppliers)} style={{fontSize:12,border:"1px solid #e2e8f0",color:"#64748b",background:"white",padding:"5px 12px",borderRadius:8,cursor:"pointer"}}>↓ CSV</button>
+            {view==="suppliers"&&!selectedSupplier&&<button onClick={()=>setSupplierModal("new")} style={{fontSize:12,border:"1px solid #c7d2fe",color:"#4f46e5",background:"#eef2ff",padding:"5px 12px",borderRadius:8,cursor:"pointer"}}>+ Supplier</button>}
+            <button onClick={()=>setTaskModal("new")} style={{fontSize:12,background:"#4f46e5",color:"white",border:"none",padding:"5px 14px",borderRadius:8,cursor:"pointer",fontWeight:600}}>+ New Issue</button>
           </div>
         </div>
-        {selectedFactory&&activeFactory&&(
-          <div style={{maxWidth:960,margin:"0 auto",padding:"0 16px 8px",display:"flex",alignItems:"center",gap:6,fontSize:13}}>
-            <button onClick={()=>{setSelectedFactory(null);setSelectedIds([]);}} style={{color:"#4f46e5",background:"none",border:"none",cursor:"pointer",padding:0}}>Factories</button>
+        {selectedSupplier&&activeSupplier&&(
+          <div style={{maxWidth:980,margin:"0 auto",padding:"0 16px 8px",display:"flex",alignItems:"center",gap:6,fontSize:13}}>
+            <button onClick={()=>{setSelectedSupplier(null);setSelectedIds([]);}} style={{color:"#4f46e5",background:"none",border:"none",cursor:"pointer",padding:0}}>Suppliers</button>
             <span style={{color:"#cbd5e1"}}>›</span>
-            <span style={{color:"#334155",fontWeight:600}}>{activeFactory.name}</span>
-            {activeFactory.location&&<span style={{color:"#94a3b8"}}>· {activeFactory.location}</span>}
+            <span style={{color:"#334155",fontWeight:600}}>{activeSupplier.name}</span>
+            {activeSupplier.location&&<span style={{color:"#94a3b8"}}>· {activeSupplier.location}</span>}
           </div>
         )}
       </div>
 
-      <div style={{maxWidth:960,margin:"0 auto",padding:"20px 16px"}}>
+      <div style={{maxWidth:980,margin:"0 auto",padding:"20px 16px"}}>
         {error&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#dc2626"}}>{error}</div>}
         {loading?(
           <div style={{textAlign:"center",padding:"80px 0",color:"#94a3b8",fontSize:14}}>⏳ Connecting to database...</div>
         ):(
           <>
-            {/* Factory detail */}
-            {selectedFactory&&<>
+            {/* Supplier detail — show ALL tasks including Done */}
+            {selectedSupplier&&<>
               <FilterBar/>
               <BulkBar count={selectedIds.length} onStatusChange={handleBulkStatus} onClear={()=>setSelectedIds([])}/>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{fontSize:13,color:"#94a3b8"}}>{factoryTasks.length} tasks</span>
-                <Btn small onClick={()=>setTaskModal("new")}>+ Add task</Btn>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontSize:13,color:"#94a3b8"}}>{supplierTasks.length} issues</span>
+                <button onClick={()=>setTaskModal("new")} style={{fontSize:12,background:"#4f46e5",color:"white",border:"none",padding:"5px 14px",borderRadius:8,cursor:"pointer"}}>+ Add issue</button>
               </div>
-              <TaskList list={factoryTasks}/>
+              <IssueList list={supplierTasks}/>
             </>}
 
-            {/* Dashboard */}
-            {view==="dashboard"&&!selectedFactory&&<>
+            {/* Dashboard — only active (non-Done) tasks */}
+            {view==="dashboard"&&!selectedSupplier&&<>
               <KPIBar tasks={tasks}/>
               {overdueAll.length>0&&(
-                <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
+                <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px",marginBottom:12}}>
                   <div style={{fontWeight:600,fontSize:13,color:"#dc2626",marginBottom:8}}>🔴 Overdue ({overdueAll.length})</div>
-                  {overdueAll.map(t=>{const fac=factories.find(f=>f.id===t.factoryId);return(
-                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"3px 0"}}>
-                      <span style={{color:"#dc2626"}}>{t.title} <span style={{color:"#f87171",fontWeight:400}}>· {t.partner}</span></span>
-                      <span style={{color:"#f87171",fontSize:11}}>{fac?.name} · {Math.abs(daysLeft(t.dueDate))}d overdue</span>
+                  {overdueAll.map(t=>{const sup=suppliers.find(s=>s.id===t.supplierId);return(
+                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0"}}>
+                      <span style={{color:"#dc2626"}}>{t.title}<span style={{color:"#f87171",fontWeight:400}}> · {sup?.name}</span></span>
+                      <span style={{color:"#f87171",fontSize:11}}>{Math.abs(daysLeft(t.dueDate))}d overdue · {t.owner||"—"}</span>
                     </div>
                   );})}
                 </div>
               )}
               {dueSoonAll.length>0&&(
-                <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
+                <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"12px 16px",marginBottom:12}}>
                   <div style={{fontWeight:600,fontSize:13,color:"#d97706",marginBottom:8}}>🟡 Due within 7 days ({dueSoonAll.length})</div>
-                  {dueSoonAll.map(t=>{const fac=factories.find(f=>f.id===t.factoryId);return(
-                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"3px 0"}}>
-                      <span style={{color:"#d97706"}}>{t.title} <span style={{color:"#fbbf24",fontWeight:400}}>· {t.partner}</span></span>
-                      <span style={{color:"#fbbf24",fontSize:11}}>{fac?.name} · {daysLeft(t.dueDate)===0?"today":daysLeft(t.dueDate)+"d left"}</span>
+                  {dueSoonAll.map(t=>{const sup=suppliers.find(s=>s.id===t.supplierId);return(
+                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0"}}>
+                      <span style={{color:"#d97706"}}>{t.title}<span style={{color:"#fbbf24",fontWeight:400}}> · {sup?.name}</span></span>
+                      <span style={{color:"#fbbf24",fontSize:11}}>{daysLeft(t.dueDate)===0?"today":daysLeft(t.dueDate)+"d left"} · {t.owner||"—"}</span>
                     </div>
                   );})}
                 </div>
               )}
-              <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:10}}>Recent tasks</div>
-              {tasks.length===0
+              <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:10}}>Active issues</div>
+              {activeTasks.length===0
                 ?<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8"}}>
-                  <div style={{fontSize:40,marginBottom:8}}>🏭</div>
-                  <div style={{fontSize:14}}>Start by adding a <b>Factory</b>, then add tasks.</div>
+                  <div style={{fontSize:40,marginBottom:8}}>✅</div>
+                  <div style={{fontSize:14}}>All clear! No active issues.</div>
                 </div>
-                :<><TaskList list={tasks.slice(0,8)}/>
-                  {tasks.length>8&&<button onClick={()=>setView("projects")} style={{width:"100%",textAlign:"center",color:"#4f46e5",fontSize:13,background:"none",border:"none",cursor:"pointer",padding:"12px 0"}}>View all {tasks.length} tasks →</button>}
+                :<><IssueList list={activeTasks.slice(0,10)}/>
+                  {activeTasks.length>10&&<button onClick={()=>setView("issues")} style={{width:"100%",textAlign:"center",color:"#4f46e5",fontSize:13,background:"none",border:"none",cursor:"pointer",padding:"12px 0"}}>View all {activeTasks.length} active issues →</button>}
                 </>
               }
             </>}
 
-            {/* Factories */}
-            {view==="factories"&&!selectedFactory&&(
-              factories.length===0
-                ?<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:8}}>🏭</div><div style={{fontSize:14}}>No factories yet. Click <b>+ Factory</b>.</div></div>
+            {/* Suppliers */}
+            {view==="suppliers"&&!selectedSupplier&&(
+              suppliers.length===0
+                ?<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:8}}>🏢</div><div style={{fontSize:14}}>No suppliers yet. Click <b>+ Supplier</b>.</div></div>
                 :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
-                  {factories.map(f=><FactoryCard key={f.id} factory={f} tasks={tasks.filter(t=>t.factoryId===f.id)}
-                    onOpen={id=>{setSelectedFactory(id);setSearch("");setFilterStatus("All");setFilterType("All");}}
-                    onEdit={setFactoryModal} onDelete={handleDeleteFactory}/>)}
+                  {suppliers.map(s=><SupplierCard key={s.id} supplier={s} tasks={tasks.filter(t=>t.supplierId===s.id)}
+                    onOpen={id=>{setSelectedSupplier(id);setSearch("");setFilterStatus("All");setFilterType("All");}}
+                    onEdit={setSupplierModal} onDelete={handleDeleteSupplier}/>)}
                 </div>
             )}
 
-            {/* All Tasks */}
-            {view==="projects"&&!selectedFactory&&<>
+            {/* All Issues */}
+            {view==="issues"&&!selectedSupplier&&<>
               <FilterBar/>
               <BulkBar count={selectedIds.length} onStatusChange={handleBulkStatus} onClear={()=>setSelectedIds([])}/>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:10}}>{allFiltered.length} tasks</div>
-              <TaskList list={allFiltered}/>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:10}}>{allFiltered.length} issues</div>
+              <IssueList list={allFiltered}/>
             </>}
 
             {/* Stats */}
-            {view==="stats"&&!selectedFactory&&<>
+            {view==="stats"&&!selectedSupplier&&<>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
                 <div style={{background:"white",border:"1px solid #f1f5f9",borderRadius:12,padding:16}}>
                   <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:12}}>By status</div>
                   {STATUSES.map(s=>{const c=tasks.filter(t=>t.status===s).length;const pct=tasks.length?(c/tasks.length)*100:0;return(
                     <div key={s} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                       <span style={{...Object.fromEntries(STATUS_COLOR[s].split(";").map(x=>x.split(":").map(y=>y.trim()))),fontSize:11,borderRadius:20,padding:"2px 8px",width:72,textAlign:"center",display:"inline-block"}}>{s}</span>
-                      <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:8}}>
-                        <div style={{background:"#818cf8",height:8,borderRadius:4,width:`${pct}%`}}/>
-                      </div>
+                      <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:8}}><div style={{background:"#818cf8",height:8,borderRadius:4,width:`${pct}%`}}/></div>
                       <span style={{fontSize:12,color:"#94a3b8",width:20,textAlign:"right"}}>{c}</span>
                     </div>
                   );})}
                 </div>
                 <div style={{background:"white",border:"1px solid #f1f5f9",borderRadius:12,padding:16}}>
-                  <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:12}}>By factory</div>
-                  {factories.length===0?<div style={{fontSize:13,color:"#94a3b8"}}>No data.</div>:factories.map(f=>{
-                    const ft=tasks.filter(t=>t.factoryId===f.id);const done=ft.filter(t=>t.status==="Done").length;const rate=ft.length?Math.round((done/ft.length)*100):0;return(
-                      <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <span style={{fontSize:12,color:"#334155",width:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</span>
-                        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:8}}>
-                          <div style={{background:"#4ade80",height:8,borderRadius:4,width:`${rate}%`}}/>
-                        </div>
-                        <span style={{fontSize:11,color:"#94a3b8",width:60,textAlign:"right"}}>{done}/{ft.length} · {rate}%</span>
+                  <div style={{fontWeight:600,fontSize:14,color:"#334155",marginBottom:12}}>Completion by supplier</div>
+                  {suppliers.length===0?<div style={{fontSize:13,color:"#94a3b8"}}>No data.</div>:suppliers.map(s=>{
+                    const st=tasks.filter(t=>t.supplierId===s.id);const done=st.filter(t=>t.status==="Done").length;const rate=st.length?Math.round((done/st.length)*100):0;return(
+                      <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,color:"#334155",width:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span>
+                        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:8}}><div style={{background:"#4ade80",height:8,borderRadius:4,width:`${rate}%`}}/></div>
+                        <span style={{fontSize:11,color:"#94a3b8",width:60,textAlign:"right"}}>{done}/{st.length} · {rate}%</span>
                       </div>
                     );
                   })}
@@ -659,9 +756,7 @@ function App(){
                       <div style={{fontSize:36,fontWeight:800,color:"#4f46e5"}}>{rate}%</div>
                       <div style={{fontSize:12,color:"#64748b",marginTop:4}}>{type}</div>
                       <div style={{fontSize:11,color:"#94a3b8"}}>{done}/{items.length} done</div>
-                      <div style={{marginTop:8,background:"#f1f5f9",borderRadius:4,height:8}}>
-                        <div style={{background:"#818cf8",height:8,borderRadius:4,width:`${rate}%`}}/>
-                      </div>
+                      <div style={{marginTop:8,background:"#f1f5f9",borderRadius:4,height:8}}><div style={{background:"#818cf8",height:8,borderRadius:4,width:`${rate}%`}}/></div>
                     </div>
                   );})}
                 </div>
@@ -671,9 +766,10 @@ function App(){
         )}
       </div>
 
-      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} factories={factories} defaultFactoryId={selectedFactory} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
-      {factoryModal&&<FactoryModal factory={factoryModal==="new"?null:factoryModal} onSave={handleSaveFactory} onClose={()=>setFactoryModal(null)}/>}
+      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} suppliers={suppliers} defaultSupplierId={selectedSupplier} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
+      {supplierModal&&<SupplierModal supplier={supplierModal==="new"?null:supplierModal} onSave={handleSaveSupplier} onClose={()=>setSupplierModal(null)}/>}
       {quickUpdateTask&&<QuickUpdateModal task={quickUpdateTask} onSave={async(updated)=>{await handleSaveTask(updated);setQuickUpdateTask(null);}} onClose={()=>setQuickUpdateTask(null)}/>}
+      {viewTask&&<TaskDetailModal task={viewTask} suppliers={suppliers} onClose={()=>setViewTask(null)} onEdit={t=>{setViewTask(null);setTaskModal(t);}} onQuickUpdate={t=>{setViewTask(null);setQuickUpdateTask(t);}}/>}
     </div>
   );
 }
