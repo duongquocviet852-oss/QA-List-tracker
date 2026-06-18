@@ -31,8 +31,8 @@ async function dbDelete(table,id){const r=await fetch(`${SUPA_URL}/rest/v1/${tab
 const STATUSES=["New","In Progress","Pending","Done"];
 const PRIORITIES=["High","Medium","Low"];
 const TYPES=["Long-term","Short-term"];
-const CATEGORIES=["4M Machine","4M Method","4M Material","4M Man","Inspection","No doc","QC","Other"];
-const PROCESSES=["Incoming Material Inspection","Manufacturing","Filling","Sealing","QC","Packing","Assembly","Final Inspection","Other"];
+const CATEGORIES=["4M Machine","4M Method","4M Material","4M Man","Inspection","No document","QA/QC","Other"];
+const PROCESSES=["Incoming Material Inspection","Manufacturing","Filling","Sealing","Capping","Labeling","QC","In-process Inspection","Packing","Assembly","Final Inspection","Warehousing","Shipping","Other"];
 
 const STATUS_COLOR={"New":"#f1f5f9;color:#475569","In Progress":"#dbeafe;color:#1d4ed8","Pending":"#fef3c7;color:#b45309","Done":"#dcfce7;color:#15803d"};
 const PRIORITY_DOT={"High":"#f87171","Medium":"#fbbf24","Low":"#d1d5db"};
@@ -258,10 +258,16 @@ function QuickUpdateModal({task,onSave,onClose}){
   );
 }
 
-function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate}){
+function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate,onEditComment,onDeleteComment}){
   const sup=suppliers.find(s=>s.id===task.supplierId);
   const dl=daysLeft(task.dueDate);
   const isOverdue=task.status!=="Done"&&dl!==null&&dl<0;
+  const[editingCommentId,setEditingCommentId]=useState(null);
+  const[editText,setEditText]=useState("");
+  const[editEvidence,setEditEvidence]=useState("");
+  function startEdit(c){setEditingCommentId(c.id);setEditText(c.text);setEditEvidence(c.evidenceUrl||"")}
+  function cancelEdit(){setEditingCommentId(null);setEditText("");setEditEvidence("")}
+  function saveEdit(c){onEditComment(task,c.id,{...c,text:editText,evidenceUrl:editEvidence});cancelEdit()}
   return(
     <Modal title={`#${task.issueNo||"—"} · ${task.title}`} onClose={onClose} wide
       footer={
@@ -350,19 +356,37 @@ function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate}){
                   <span style={{fontSize:10,color:"#94a3b8"}}>{new Date(c.ts).toLocaleString("vi-VN")}</span>
                   <span style={{fontSize:10,background:"#eef2ff",color:"#4f46e5",padding:"1px 6px",borderRadius:20}}>{c.progress}%</span>
                   <span style={{fontSize:10,background:c.status==="Done"?"#dcfce7":c.status==="In Progress"?"#dbeafe":"#f1f5f9",color:c.status==="Done"?"#15803d":c.status==="In Progress"?"#1d4ed8":"#475569",padding:"1px 6px",borderRadius:20}}>{c.status}</span>
+                  <div style={{flex:1}}/>
+                  {editingCommentId!==c.id&&<>
+                    <button onClick={()=>startEdit(c)} style={{fontSize:10,color:"#94a3b8",background:"white",border:"1px solid #e2e8f0",borderRadius:6,padding:"1px 6px",cursor:"pointer"}}>Edit</button>
+                    <button onClick={()=>{if(confirm("Delete this update?"))onDeleteComment(task,c.id)}} style={{fontSize:10,color:"#ef4444",background:"white",border:"1px solid #fecaca",borderRadius:6,padding:"1px 6px",cursor:"pointer"}}>Del</button>
+                  </>}
                 </div>
-                <div style={{fontSize:13,color:"#334155",lineHeight:1.6,marginBottom:c.evidenceUrl?8:0}}>{c.text}</div>
-                {c.evidenceUrl&&(
-                  <div style={{marginTop:6}}>
-                    {/\.(jpg|jpeg|png|gif|webp)/i.test(c.evidenceUrl)
-                      ?<img src={c.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:120}} onError={e=>{e.target.style.display="none"}}/>
-                      :<a href={c.evidenceUrl} target="_blank" rel="noreferrer"
-                          style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"5px 10px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff",textDecoration:"none"}}>
-                          🔗 View evidence
-                        </a>
-                    }
+                {editingCommentId===c.id?(
+                  <div>
+                    <textarea rows={3} value={editText} onChange={e=>setEditText(e.target.value)}
+                      style={{width:"100%",border:"1px solid #c7d2fe",borderRadius:8,padding:"6px 10px",fontSize:13,resize:"vertical",outline:"none",boxSizing:"border-box",marginBottom:6}}/>
+                    <input value={editEvidence} onChange={e=>setEditEvidence(e.target.value)} placeholder="Evidence URL..."
+                      style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",boxSizing:"border-box",marginBottom:6}}/>
+                    <div style={{display:"flex",gap:6}}>
+                      <Btn small onClick={()=>saveEdit(c)}>Save</Btn>
+                      <Btn small variant="secondary" onClick={cancelEdit}>Cancel</Btn>
+                    </div>
                   </div>
-                )}
+                ):(<>
+                  <div style={{fontSize:13,color:"#334155",lineHeight:1.6,marginBottom:c.evidenceUrl?8:0}}>{c.text}</div>
+                  {c.evidenceUrl&&(
+                    <div style={{marginTop:6}}>
+                      {/\.(jpg|jpeg|png|gif|webp)/i.test(c.evidenceUrl)
+                        ?<img src={c.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:120}} onError={e=>{e.target.style.display="none"}}/>
+                        :<a href={c.evidenceUrl} target="_blank" rel="noreferrer"
+                            style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"5px 10px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff",textDecoration:"none"}}>
+                            🔗 View evidence
+                          </a>
+                      }
+                    </div>
+                  )}
+                </>)}
               </div>
             </div>
           ))}
@@ -556,6 +580,18 @@ function App(){
     if(!confirm("Delete this issue?"))return;
     await dbDelete("tasks",id);await reload();
     setSelectedIds(ids=>ids.filter(i=>i!==id));
+  }
+  async function handleEditComment(task,commentId,updatedComment){
+    const newComments=task.comments.map(c=>c.id===commentId?updatedComment:c);
+    await dbUpdate("tasks",task.id,{comments:newComments});
+    await reload();
+    setViewTask(v=>v&&v.id===task.id?{...v,comments:newComments}:v);
+  }
+  async function handleDeleteComment(task,commentId){
+    const newComments=task.comments.filter(c=>c.id!==commentId);
+    await dbUpdate("tasks",task.id,{comments:newComments});
+    await reload();
+    setViewTask(v=>v&&v.id===task.id?{...v,comments:newComments}:v);
   }
   async function handleStatusChange(id,status){
     const progress=status==="Done"?100:tasks.find(t=>t.id===id)?.progress||0;
@@ -769,7 +805,7 @@ function App(){
       {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} suppliers={suppliers} defaultSupplierId={selectedSupplier} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
       {supplierModal&&<SupplierModal supplier={supplierModal==="new"?null:supplierModal} onSave={handleSaveSupplier} onClose={()=>setSupplierModal(null)}/>}
       {quickUpdateTask&&<QuickUpdateModal task={quickUpdateTask} onSave={async(updated)=>{await handleSaveTask(updated);setQuickUpdateTask(null);}} onClose={()=>setQuickUpdateTask(null)}/>}
-      {viewTask&&<TaskDetailModal task={viewTask} suppliers={suppliers} onClose={()=>setViewTask(null)} onEdit={t=>{setViewTask(null);setTaskModal(t);}} onQuickUpdate={t=>{setViewTask(null);setQuickUpdateTask(t);}}/>}
+      {viewTask&&<TaskDetailModal task={viewTask} suppliers={suppliers} onClose={()=>setViewTask(null)} onEdit={t=>{setViewTask(null);setTaskModal(t);}} onQuickUpdate={t=>{setViewTask(null);setQuickUpdateTask(t);}} onEditComment={handleEditComment} onDeleteComment={handleDeleteComment}/>}
     </div>
   );
 }
