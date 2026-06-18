@@ -138,8 +138,12 @@ function SupplierModal({supplier,onSave,onClose}){
   );
 }
 
-function TaskModal({task,suppliers,defaultSupplierId,onSave,onClose}){
-  const blank={id:uid(),supplierId:defaultSupplierId||suppliers[0]?.id||"",partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:"",itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
+function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
+  const sId=defaultSupplierId||suppliers[0]?.id||"";
+const supplierTasks=tasks?tasks.filter(t=>t.supplierId===sId):[];
+const maxNo=supplierTasks.reduce((max,t)=>Math.max(max,parseInt(t.issueNo)||0),0);
+const nextNo=String(maxNo+1);
+const blank={id:uid(),supplierId:sId,partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:nextNo,itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
   const[form,setForm]=useState(task?{...task}:blank);
   const[tab,setTab]=useState("basic");
   const[saving,setSaving]=useState(false);
@@ -802,7 +806,7 @@ function App(){
         )}
       </div>
 
-      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} suppliers={suppliers} defaultSupplierId={selectedSupplier} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
+      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} suppliers={suppliers} tasks={tasks} defaultSupplierId={selectedSupplier} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
       {supplierModal&&<SupplierModal supplier={supplierModal==="new"?null:supplierModal} onSave={handleSaveSupplier} onClose={()=>setSupplierModal(null)}/>}
       {quickUpdateTask&&<QuickUpdateModal task={quickUpdateTask} onSave={async(updated)=>{await handleSaveTask(updated);setQuickUpdateTask(null);}} onClose={()=>setQuickUpdateTask(null)}/>}
       {viewTask&&<TaskDetailModal task={viewTask} suppliers={suppliers} onClose={()=>setViewTask(null)} onEdit={t=>{setViewTask(null);setTaskModal(t);}} onQuickUpdate={t=>{setViewTask(null);setQuickUpdateTask(t);}} onEditComment={handleEditComment} onDeleteComment={handleDeleteComment}/>}
