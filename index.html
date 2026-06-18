@@ -50,7 +50,7 @@ function mapTask(t){return{
   itemJp:t.item_jp||"",itemEn:t.item_en||"",occurProcess:t.occur_process||"",
   productName:t.product_name||"",cause:t.cause||"",requestFromCainz:t.request_from_cainz||"",
   startDate:t.start_date||"",dueDate:t.due_date||"",progress:t.progress||0,
-  subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at
+  subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at,delayCount:t.delay_count||0
 }}
 
 function exportCSV(tasks,suppliers){
@@ -214,13 +214,17 @@ function QuickUpdateModal({task,onSave,onClose}){
   const[saving,setSaving]=useState(false);
   const isImg=url=>url&&(url.includes("drive.google.com")||/\.(jpg|jpeg|png|gif|webp)/i.test(url));
 
-  async function save(){
+async function save(){
     if(!note.trim())return;
     setSaving(true);
-    const newComment={id:uid(),text:note.trim(),progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
-    const updated={...task,progress,dueDate,status,comments:[...task.comments,newComment]};
+    const isDelayed=task.dueDate&&dueDate&&new Date(dueDate)>new Date(task.dueDate);
+    const newDelayCount=(task.delayCount||0)+(isDelayed?1:0);
+    const noteText=isDelayed?`${note.trim()} [⚠ Deadline extended: ${task.dueDate} → ${dueDate}]`:note.trim();
+    const newComment={id:uid(),text:noteText,progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
+    const updated={...task,progress,dueDate,status,delayCount:newDelayCount,comments:[...task.comments,newComment]};
     await onSave(updated);
     setSaving(false);
+  }
   }
   const g3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10};
   return(
@@ -576,7 +580,7 @@ function App(){
       owner:t.owner,factory_owner:t.factoryOwner||"",manufactory:t.manufactory||"",category:t.category||"",
       issue_no:t.issueNo||"",item_jp:t.itemJp||"",item_en:t.itemEn||"",occur_process:t.occurProcess||"",
       product_name:t.productName||"",cause:t.cause||"",request_from_cainz:t.requestFromCainz||"",
-      start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,subtasks:t.subtasks,comments:t.comments};
+      start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,delay_count:t.delayCount||0,subtasks:t.subtasks,comments:t.comments};
     if(exists)await dbUpdate("tasks",t.id,row);else await dbInsert("tasks",row);
     await reload();setTaskModal(null);
   }
