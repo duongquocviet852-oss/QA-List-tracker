@@ -28,10 +28,45 @@ async function dbInsert(table,body){const r=await fetch(`${SUPA_URL}/rest/v1/${t
 async function dbUpdate(table,id,body){const r=await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json()}
 async function dbDelete(table,id){const r=await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:H});if(!r.ok)throw new Error(await r.text())}
 
+const STEP_TEMPLATE_NEW=[
+  {group:"1",no:"1-1",title:"Factory checking"},
+  {group:"1",no:"1-2",title:"Quotation"},
+  {group:"1",no:"1-3",title:"Catalogue"},
+  {group:"2",no:"2-1",title:"Making the Sample"},
+  {group:"2",no:"2-2",title:"Quotation following the sample"},
+  {group:"3",no:"3-1",title:"Factory Audit"},
+  {group:"3",no:"3-2",title:"Contract"},
+  {group:"4",no:"4-1",title:"Making the Sample"},
+  {group:"4",no:"4-2",title:"Quotation following the sample"},
+  {group:"4",no:"4-3",title:"Trading condition (MOQ, Payment, Mold fee)"},
+  {group:"5",no:"5-1",title:"Package Sample without Printing"},
+  {group:"5",no:"5-2",title:"Quality Standard"},
+  {group:"5",no:"5-3",title:"Specification sheet (Packing/BOM/Drawing/QC process)"},
+  {group:"6",no:"6-1",title:"Explain Inspection sheet"},
+  {group:"6",no:"6-2",title:"Explain Container Inspection and Record"},
+  {group:"6",no:"6-3",title:"Package sample"},
+  {group:"6",no:"6-4",title:"Approval (Final) sample"},
+  {group:"6",no:"6-5",title:"Sign and Stamp on Documents"},
+  {group:"7",no:"7-1",title:"Sign on PO"},
+  {group:"7",no:"7-2",title:"Fumigation report"},
+  {group:"7",no:"7-3",title:"Booking shipment with Forwarder (30 days before ETD)"},
+  {group:"7",no:"7-4",title:"Inform Shipping schedule to CAINZ"},
+  {group:"8",no:"8-1",title:"Inspection Report from Factory"},
+  {group:"8",no:"8-2",title:"Inspection before loading 10 days (3rd-party)"},
+  {group:"9",no:"9-1",title:"Loading / Container Inspection"},
+  {group:"9",no:"9-2",title:"Shipping Document"},
+];
+const STEP_TEMPLATE_EXISTING=STEP_TEMPLATE_NEW.filter(s=>["4","5","6","7","8","9"].includes(s.group));
+function makeSteps(factoryType){
+  const tpl=factoryType==="New"?STEP_TEMPLATE_NEW:STEP_TEMPLATE_EXISTING;
+  return tpl.map(s=>({id:uid(),group:s.group,no:s.no,title:s.title,status:"New",dueDate:"",note:"",remark:"",evidenceUrl:"",updatedAt:"",skipped:false}));
+}
+function mapDevProject(p){return{id:p.id,supplierId:p.supplier_id,title:p.title,factoryType:p.factory_type||"New",status:p.status||"In Progress",steps:p.steps||[],createdAt:p.created_at}}
+
 const STATUSES=["New","In Progress","Pending","Done"];
 const PRIORITIES=["High","Medium","Low"];
 const TYPES=["Long-term","Short-term"];
-const CATEGORIES=["4M Machine","4M Method","4M Material","4M Man","Inspection","No document","QA/QC","Other"];
+const CATEGORIES=["4M Machine","4M Method","4M Material","4M Man","Inspection","No doc","QC","Other"];
 const PROCESSES=["Incoming Material Inspection","Manufacturing","Filling","Sealing","Capping","Labeling","QC","In-process Inspection","Packing","Assembly","Final Inspection","Warehousing","Shipping","Other"];
 
 const STATUS_COLOR={"New":"#f1f5f9;color:#475569","In Progress":"#dbeafe;color:#1d4ed8","Pending":"#fef3c7;color:#b45309","Done":"#dcfce7;color:#15803d"};
@@ -50,7 +85,7 @@ function mapTask(t){return{
   itemJp:t.item_jp||"",itemEn:t.item_en||"",occurProcess:t.occur_process||"",
   productName:t.product_name||"",cause:t.cause||"",requestFromCainz:t.request_from_cainz||"",
   startDate:t.start_date||"",dueDate:t.due_date||"",progress:t.progress||0,
-  subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at,delayCount:t.delay_count||0
+  subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at
 }}
 
 function exportCSV(tasks,suppliers){
@@ -138,12 +173,8 @@ function SupplierModal({supplier,onSave,onClose}){
   );
 }
 
-function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
-  const sId=defaultSupplierId||suppliers[0]?.id||"";
-const supplierTasks=tasks?tasks.filter(t=>t.supplierId===sId):[];
-const maxNo=supplierTasks.reduce((max,t)=>Math.max(max,parseInt(t.issueNo)||0),0);
-const nextNo=String(maxNo+1);
-const blank={id:uid(),supplierId:sId,partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:nextNo,itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
+function TaskModal({task,suppliers,defaultSupplierId,onSave,onClose}){
+  const blank={id:uid(),supplierId:defaultSupplierId||suppliers[0]?.id||"",partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:"",itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
   const[form,setForm]=useState(task?{...task}:blank);
   const[tab,setTab]=useState("basic");
   const[saving,setSaving]=useState(false);
@@ -214,14 +245,11 @@ function QuickUpdateModal({task,onSave,onClose}){
   const[saving,setSaving]=useState(false);
   const isImg=url=>url&&(url.includes("drive.google.com")||/\.(jpg|jpeg|png|gif|webp)/i.test(url));
 
-async function save(){
+  async function save(){
     if(!note.trim())return;
     setSaving(true);
-    const isDelayed=task.dueDate&&dueDate&&new Date(dueDate)>new Date(task.dueDate);
-    const newDelayCount=(task.delayCount||0)+(isDelayed?1:0);
-    const noteText=isDelayed?`${note.trim()} [⚠ Deadline extended: ${task.dueDate} → ${dueDate}]`:note.trim();
-    const newComment={id:uid(),text:noteText,progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
-    const updated={...task,progress,dueDate,status,delayCount:newDelayCount,comments:[...task.comments,newComment]};
+    const newComment={id:uid(),text:note.trim(),progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
+    const updated={...task,progress,dueDate,status,comments:[...task.comments,newComment]};
     await onSave(updated);
     setSaving(false);
   }
@@ -472,6 +500,169 @@ function BulkBar({count,onStatusChange,onClear}){
   );
 }
 
+function StepRow({step,onUpdate,onDelete}){
+  const[expanded,setExpanded]=useState(false);
+  const dl=daysLeft(step.dueDate);
+  const isOverdue=step.status!=="Done"&&!step.skipped&&dl!==null&&dl<0;
+  const STEP_STATUS_COLOR={"New":"#f1f5f9;color:#475569","In Progress":"#dbeafe;color:#1d4ed8","Pending":"#fef3c7;color:#b45309","Done":"#dcfce7;color:#15803d"};
+  return(
+    <div style={{border:`1px solid ${isOverdue?"#fecaca":"#f1f5f9"}`,borderRadius:8,marginBottom:6,opacity:step.skipped?0.5:1}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setExpanded(!expanded)}>
+        <span style={{fontSize:11,color:"#94a3b8",width:32,flexShrink:0}}>{step.no}</span>
+        <select value={step.status} onClick={e=>e.stopPropagation()} onChange={e=>onUpdate({...step,status:e.target.value,updatedAt:new Date().toISOString()})}
+          style={{...Object.fromEntries(STEP_STATUS_COLOR[step.status].split(";").map(s=>s.split(":").map(x=>x.trim()))),border:"none",borderRadius:8,padding:"2px 6px",fontSize:10,fontWeight:600,cursor:"pointer",outline:"none",flexShrink:0}}>
+          {STATUSES.map(s=><option key={s}>{s}</option>)}
+        </select>
+        <span style={{flex:1,fontSize:12,color:step.skipped?"#94a3b8":"#1e293b",textDecoration:step.skipped?"line-through":"none"}}>{step.title}</span>
+        {step.dueDate&&<span style={{fontSize:10,color:isOverdue?"#ef4444":"#94a3b8",flexShrink:0}}>{formatDate(step.dueDate)}</span>}
+        {step.evidenceUrl&&<span style={{fontSize:10,flexShrink:0}}>📎</span>}
+        <span style={{fontSize:10,color:"#cbd5e1",flexShrink:0}}>{expanded?"▲":"▼"}</span>
+      </div>
+      {expanded&&(
+        <div style={{padding:"10px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div>
+              <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Due date</label>
+              <input type="date" value={step.dueDate} onChange={e=>onUpdate({...step,dueDate:e.target.value})}
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+              <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#64748b",cursor:"pointer"}}>
+                <input type="checkbox" checked={step.skipped} onChange={e=>onUpdate({...step,skipped:e.target.checked})} style={{accentColor:"#94a3b8"}}/>
+                Skip / Not applicable
+              </label>
+            </div>
+          </div>
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Update note</label>
+            <textarea rows={2} value={step.note} onChange={e=>onUpdate({...step,note:e.target.value,updatedAt:new Date().toISOString()})}
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box",resize:"vertical"}}/>
+          </div>
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Remark</label>
+            <input value={step.remark} onChange={e=>onUpdate({...step,remark:e.target.value})}
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Evidence (link/ảnh)</label>
+            <input value={step.evidenceUrl} onChange={e=>onUpdate({...step,evidenceUrl:e.target.value})} placeholder="https://drive.google.com/..."
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+            {step.evidenceUrl&&(
+              <div style={{marginTop:6}}>
+                {/\.(jpg|jpeg|png|gif|webp)/i.test(step.evidenceUrl)
+                  ?<img src={step.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:100}} onError={e=>{e.target.style.display="none"}}/>
+                  :<a href={step.evidenceUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#4f46e5"}}>🔗 View evidence</a>
+                }
+              </div>
+            )}
+          </div>
+          {step.updatedAt&&<div style={{fontSize:10,color:"#cbd5e1"}}>Last updated: {new Date(step.updatedAt).toLocaleString("vi-VN")}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DevProjectModal({project,suppliers,defaultSupplierId,onSave,onClose}){
+  const[title,setTitle]=useState(project?.title||"");
+  const[factoryType,setFactoryType]=useState(project?.factoryType||"New");
+  const[supplierId,setSupplierId]=useState(project?.supplierId||defaultSupplierId||suppliers[0]?.id||"");
+  const[saving,setSaving]=useState(false);
+  async function save(){
+    setSaving(true);
+    const steps=project?project.steps:makeSteps(factoryType);
+    await onSave({id:project?.id||uid(),supplierId,title:title.trim(),factoryType,status:project?.status||"In Progress",steps});
+    setSaving(false);
+  }
+  return(
+    <Modal title={project?"Edit project":"New development project"} onClose={onClose}
+      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!title.trim()||!supplierId||saving}>{saving?"Saving...":"Save"}</Btn></>}>
+      <Sel label="Supplier *" value={supplierId} onChange={setSupplierId}
+        options={[{value:"",label:"— chọn supplier —"},...suppliers.map(s=>({value:s.id,label:s.name}))]} required/>
+      <Inp label="Project title (SKU/product name) *" value={title} onChange={setTitle} placeholder="VD: KusaQuick 500mL new bottle" required/>
+      {!project&&<Sel label="Factory type" value={factoryType} onChange={setFactoryType}
+        options={[{value:"New",label:"New factory (full process, step 1-9)"},{value:"Existing",label:"Existing factory (step 4-9 only)"}]}/>}
+      {project&&<div style={{fontSize:11,color:"#94a3b8",background:"#f8fafc",padding:"8px 10px",borderRadius:8}}>Factory type: <b>{factoryType}</b> (không thể đổi sau khi tạo, vì checklist đã sinh ra)</div>}
+    </Modal>
+  );
+}
+
+function DevProjectDetail({project,suppliers,onUpdateStep,onAddStep,onDeleteStep,onClose,onEdit,onDelete}){
+  const sup=suppliers.find(s=>s.id===project.supplierId);
+  const[newStepTitle,setNewStepTitle]=useState("");
+  const groups=[...new Set(project.steps.map(s=>s.group))];
+  const activeSteps=project.steps.filter(s=>!s.skipped);
+  const doneSteps=activeSteps.filter(s=>s.status==="Done");
+  const rate=activeSteps.length?Math.round((doneSteps.length/activeSteps.length)*100):0;
+  function addCustomStep(){
+    if(!newStepTitle.trim())return;
+    onAddStep({id:uid(),group:"custom",no:"+",title:newStepTitle.trim(),status:"New",dueDate:"",note:"",remark:"",evidenceUrl:"",updatedAt:"",skipped:false});
+    setNewStepTitle("");
+  }
+  return(
+    <Modal title={project.title} onClose={onClose} wide
+      footer={
+        <div style={{display:"flex",gap:8,width:"100%"}}>
+          <Btn variant="secondary" onClick={onClose}>Close</Btn>
+          <div style={{flex:1}}/>
+          <Btn variant="secondary" onClick={()=>onEdit(project)}>Edit</Btn>
+          <Btn variant="danger" onClick={()=>onDelete(project.id)}>Delete</Btn>
+        </div>
+      }>
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        <span style={{fontSize:11,background:"#eef2ff",color:"#4f46e5",padding:"3px 10px",borderRadius:20}}>{sup?.name}</span>
+        <span style={{fontSize:11,background:"#f8fafc",color:"#64748b",padding:"3px 10px",borderRadius:20}}>{project.factoryType} factory</span>
+        <span style={{fontSize:11,background:"#f0fdf4",color:"#15803d",padding:"3px 10px",borderRadius:20}}>{doneSteps.length}/{activeSteps.length} done · {rate}%</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:6}}><div style={{background:"#818cf8",height:6,borderRadius:4,width:`${rate}%`}}/></div>
+        <span style={{fontSize:11,color:"#94a3b8"}}>{rate}%</span>
+      </div>
+      {groups.map(g=>(
+        <div key={g} style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>
+            {g==="custom"?"Custom steps":`Group ${g}`}
+          </div>
+          {project.steps.filter(s=>s.group===g).map(step=>(
+            <StepRow key={step.id} step={step} onUpdate={onUpdateStep} onDelete={onDeleteStep}/>
+          ))}
+        </div>
+      ))}
+      <div style={{display:"flex",gap:8,marginTop:12,paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
+        <input value={newStepTitle} onChange={e=>setNewStepTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCustomStep()}
+          placeholder="Thêm step tùy chỉnh cho case đặc biệt..."
+          style={{flex:1,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none"}}/>
+        <Btn small onClick={addCustomStep}>+ Add step</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function DevProjectCard({project,suppliers,onOpen}){
+  const sup=suppliers.find(s=>s.id===project.supplierId);
+  const activeSteps=project.steps.filter(s=>!s.skipped);
+  const doneSteps=activeSteps.filter(s=>s.status==="Done");
+  const rate=activeSteps.length?Math.round((doneSteps.length/activeSteps.length)*100):0;
+  const overdueSteps=activeSteps.filter(s=>s.status!=="Done"&&s.dueDate&&daysLeft(s.dueDate)<0);
+  return(
+    <div onClick={()=>onOpen(project)}
+      style={{background:"white",border:`1px solid ${overdueSteps.length>0?"#fecaca":"#f1f5f9"}`,borderRadius:12,padding:14,cursor:"pointer",marginBottom:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+        <div>
+          <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{project.title}</div>
+          <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{sup?.name} · {project.factoryType} factory</div>
+        </div>
+        <span style={{fontSize:10,background:project.status==="Done"?"#dcfce7":"#dbeafe",color:project.status==="Done"?"#15803d":"#1d4ed8",padding:"2px 8px",borderRadius:20,flexShrink:0}}>{project.status}</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:5}}><div style={{background:"#818cf8",height:5,borderRadius:4,width:`${rate}%`}}/></div>
+        <span style={{fontSize:11,color:"#94a3b8"}}>{doneSteps.length}/{activeSteps.length} · {rate}%</span>
+      </div>
+      {overdueSteps.length>0&&<div style={{fontSize:10,color:"#ef4444",marginTop:6}}>🔴 {overdueSteps.length} step overdue</div>}
+    </div>
+  );
+}
+
 function SupplierCard({supplier,tasks,onOpen,onEdit,onDelete}){
   const active=tasks.filter(t=>t.status!=="Done");
   const done=tasks.filter(t=>t.status==="Done").length;
@@ -540,6 +731,10 @@ function KPIBar({tasks}){
 function App(){
   const[suppliers,setSuppliers]=useState([]);
   const[tasks,setTasks]=useState([]);
+  const[devProjects,setDevProjects]=useState([]);
+  const[supplierTab,setSupplierTab]=useState("dev");
+  const[devProjectModal,setDevProjectModal]=useState(null);
+  const[viewDevProject,setViewDevProject]=useState(null);
   const[view,setView]=useState("dashboard");
   const[selectedSupplier,setSelectedSupplier]=useState(null);
   const[taskModal,setTaskModal]=useState(null);
@@ -555,12 +750,42 @@ function App(){
 
   async function reload(){
     try{
-      const[f,t]=await Promise.all([dbGet("factories"),dbGet("tasks")]);
-      setSuppliers(f.map(mapSupplier));setTasks(t.map(mapTask));setError("");
+      const[f,t,d]=await Promise.all([dbGet("factories"),dbGet("tasks"),dbGet("dev_projects")]);
+      setSuppliers(f.map(mapSupplier));setTasks(t.map(mapTask));setDevProjects(d.map(mapDevProject));setError("");
     }catch(e){setError("DB error: "+e.message);}
     setLoading(false);
   }
   useEffect(()=>{reload();},[]);
+
+  async function handleSaveDevProject(p){
+    const exists=devProjects.find(x=>x.id===p.id);
+    const row={id:p.id,supplier_id:p.supplierId,title:p.title,factory_type:p.factoryType,status:p.status,steps:p.steps};
+    if(exists)await dbUpdate("dev_projects",p.id,row);else await dbInsert("dev_projects",row);
+    await reload();setDevProjectModal(null);
+    setViewDevProject(v=>v&&v.id===p.id?{...v,...p}:v);
+  }
+  async function handleDeleteDevProject(id){
+    if(!confirm("Delete this development project?"))return;
+    await dbDelete("dev_projects",id);await reload();setViewDevProject(null);
+  }
+  async function handleUpdateStep(project,updatedStep){
+    const newSteps=project.steps.map(s=>s.id===updatedStep.id?updatedStep:s);
+    await dbUpdate("dev_projects",project.id,{steps:newSteps});
+    setDevProjects(ps=>ps.map(p=>p.id===project.id?{...p,steps:newSteps}:p));
+    setViewDevProject(v=>v&&v.id===project.id?{...v,steps:newSteps}:v);
+  }
+  async function handleAddStep(project,newStep){
+    const newSteps=[...project.steps,newStep];
+    await dbUpdate("dev_projects",project.id,{steps:newSteps});
+    setDevProjects(ps=>ps.map(p=>p.id===project.id?{...p,steps:newSteps}:p));
+    setViewDevProject(v=>v&&v.id===project.id?{...v,steps:newSteps}:v);
+  }
+  async function handleDeleteStep(project,stepId){
+    const newSteps=project.steps.filter(s=>s.id!==stepId);
+    await dbUpdate("dev_projects",project.id,{steps:newSteps});
+    setDevProjects(ps=>ps.map(p=>p.id===project.id?{...p,steps:newSteps}:p));
+    setViewDevProject(v=>v&&v.id===project.id?{...v,steps:newSteps}:v);
+  }
 
   async function handleSaveSupplier(s){
     const exists=suppliers.find(x=>x.id===s.id);
@@ -579,7 +804,7 @@ function App(){
       owner:t.owner,factory_owner:t.factoryOwner||"",manufactory:t.manufactory||"",category:t.category||"",
       issue_no:t.issueNo||"",item_jp:t.itemJp||"",item_en:t.itemEn||"",occur_process:t.occurProcess||"",
       product_name:t.productName||"",cause:t.cause||"",request_from_cainz:t.requestFromCainz||"",
-      start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,delay_count:t.delayCount||0,subtasks:t.subtasks,comments:t.comments};
+      start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,subtasks:t.subtasks,comments:t.comments};
     if(exists)await dbUpdate("tasks",t.id,row);else await dbInsert("tasks",row);
     await reload();setTaskModal(null);
   }
@@ -698,15 +923,39 @@ function App(){
           <div style={{textAlign:"center",padding:"80px 0",color:"#94a3b8",fontSize:14}}>⏳ Connecting to database...</div>
         ):(
           <>
-            {/* Supplier detail — show ALL tasks including Done */}
+            {/* Supplier detail — tabs Development | QC */}
             {selectedSupplier&&<>
-              <FilterBar/>
-              <BulkBar count={selectedIds.length} onStatusChange={handleBulkStatus} onClear={()=>setSelectedIds([])}/>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <span style={{fontSize:13,color:"#94a3b8"}}>{supplierTasks.length} issues</span>
-                <button onClick={()=>setTaskModal("new")} style={{fontSize:12,background:"#4f46e5",color:"white",border:"none",padding:"5px 14px",borderRadius:8,cursor:"pointer"}}>+ Add issue</button>
+              <div style={{display:"flex",gap:4,marginBottom:14,borderBottom:"1px solid #f1f5f9"}}>
+                {[["dev","Development"],["qc","QC"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setSupplierTab(v)}
+                    style={{padding:"7px 16px",fontSize:13,border:"none",borderBottom:supplierTab===v?"2px solid #4f46e5":"2px solid transparent",color:supplierTab===v?"#4f46e5":"#94a3b8",background:"none",cursor:"pointer",fontWeight:supplierTab===v?600:400}}>
+                    {l}
+                  </button>
+                ))}
               </div>
-              <IssueList list={supplierTasks}/>
+
+              {supplierTab==="dev"&&<>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:13,color:"#94a3b8"}}>{devProjects.filter(p=>p.supplierId===selectedSupplier).length} projects</span>
+                  <button onClick={()=>setDevProjectModal("new")} style={{fontSize:12,background:"#4f46e5",color:"white",border:"none",padding:"5px 14px",borderRadius:8,cursor:"pointer"}}>+ New project</button>
+                </div>
+                {devProjects.filter(p=>p.supplierId===selectedSupplier).length===0
+                  ?<div style={{textAlign:"center",padding:"40px 0",color:"#94a3b8",fontSize:13}}>No development projects yet.</div>
+                  :devProjects.filter(p=>p.supplierId===selectedSupplier).map(p=>(
+                    <DevProjectCard key={p.id} project={p} suppliers={suppliers} onOpen={setViewDevProject}/>
+                  ))
+                }
+              </>}
+
+              {supplierTab==="qc"&&<>
+                <FilterBar/>
+                <BulkBar count={selectedIds.length} onStatusChange={handleBulkStatus} onClear={()=>setSelectedIds([])}/>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:13,color:"#94a3b8"}}>{supplierTasks.length} issues</span>
+                  <button onClick={()=>setTaskModal("new")} style={{fontSize:12,background:"#4f46e5",color:"white",border:"none",padding:"5px 14px",borderRadius:8,cursor:"pointer"}}>+ Add issue</button>
+                </div>
+                <IssueList list={supplierTasks}/>
+              </>}
             </>}
 
             {/* Dashboard — only active (non-Done) tasks */}
@@ -809,10 +1058,18 @@ function App(){
         )}
       </div>
 
-      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} suppliers={suppliers} tasks={tasks} defaultSupplierId={selectedSupplier} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
+      {taskModal&&<TaskModal task={taskModal==="new"?null:taskModal} suppliers={suppliers} defaultSupplierId={selectedSupplier} onSave={handleSaveTask} onClose={()=>setTaskModal(null)}/>}
       {supplierModal&&<SupplierModal supplier={supplierModal==="new"?null:supplierModal} onSave={handleSaveSupplier} onClose={()=>setSupplierModal(null)}/>}
       {quickUpdateTask&&<QuickUpdateModal task={quickUpdateTask} onSave={async(updated)=>{await handleSaveTask(updated);setQuickUpdateTask(null);}} onClose={()=>setQuickUpdateTask(null)}/>}
       {viewTask&&<TaskDetailModal task={viewTask} suppliers={suppliers} onClose={()=>setViewTask(null)} onEdit={t=>{setViewTask(null);setTaskModal(t);}} onQuickUpdate={t=>{setViewTask(null);setQuickUpdateTask(t);}} onEditComment={handleEditComment} onDeleteComment={handleDeleteComment}/>}
+      {devProjectModal&&<DevProjectModal project={devProjectModal==="new"?null:devProjectModal} suppliers={suppliers} defaultSupplierId={selectedSupplier} onSave={handleSaveDevProject} onClose={()=>setDevProjectModal(null)}/>}
+      {viewDevProject&&<DevProjectDetail project={viewDevProject} suppliers={suppliers}
+        onUpdateStep={(step)=>handleUpdateStep(viewDevProject,step)}
+        onAddStep={(step)=>handleAddStep(viewDevProject,step)}
+        onDeleteStep={(stepId)=>handleDeleteStep(viewDevProject,stepId)}
+        onClose={()=>setViewDevProject(null)}
+        onEdit={p=>{setViewDevProject(null);setDevProjectModal(p);}}
+        onDelete={handleDeleteDevProject}/>}
     </div>
   );
 }
