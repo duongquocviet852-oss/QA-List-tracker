@@ -61,7 +61,7 @@ function makeSteps(factoryType){
   const tpl=factoryType==="New"?STEP_TEMPLATE_NEW:STEP_TEMPLATE_EXISTING;
   return tpl.map(s=>({id:uid(),group:s.group,no:s.no,title:s.title,status:"New",dueDate:"",comments:[],skipped:false}));
 }
-function mapDevProject(p){return{id:p.id,supplierId:p.supplier_id,title:p.title,factoryType:p.factory_type||"New",status:p.status||"In Progress",steps:p.steps||[],groupDueDates:p.group_due_dates||{},createdAt:p.created_at}}
+function mapDevProject(p){return{id:p.id,supplierId:p.supplier_id,title:p.title,factoryType:p.factory_type||"New",status:p.status||"In Progress",steps:p.steps||[],groupDueDates:p.group_due_dates||{},startDate:p.start_date||"",targetEndDate:p.target_end_date||"",createdAt:p.created_at}}
 
 const STATUSES=["New","In Progress","Pending","Done"];
 const PRIORITIES=["High","Medium","Low"];
@@ -625,13 +625,16 @@ function DevProjectModal({project,suppliers,defaultSupplierId,onSave,onClose}){
   const[title,setTitle]=useState(project?.title||"");
   const[factoryType,setFactoryType]=useState(project?.factoryType||"New");
   const[supplierId,setSupplierId]=useState(project?.supplierId||defaultSupplierId||suppliers[0]?.id||"");
+  const[startDate,setStartDate]=useState(project?.startDate||"");
+  const[targetEndDate,setTargetEndDate]=useState(project?.targetEndDate||"");
   const[saving,setSaving]=useState(false);
   async function save(){
     setSaving(true);
     const steps=project?project.steps:makeSteps(factoryType);
-    await onSave({id:project?.id||uid(),supplierId,title:title.trim(),factoryType,status:project?.status||"In Progress",steps});
+    await onSave({id:project?.id||uid(),supplierId,title:title.trim(),factoryType,status:project?.status||"In Progress",steps,startDate,targetEndDate,groupDueDates:project?.groupDueDates||{}});
     setSaving(false);
   }
+  const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:10};
   return(
     <Modal title={project?"Edit project":"New development project"} onClose={onClose}
       footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!title.trim()||!supplierId||saving}>{saving?"Saving...":"Save"}</Btn></>}>
@@ -640,7 +643,11 @@ function DevProjectModal({project,suppliers,defaultSupplierId,onSave,onClose}){
       <Inp label="Project title (SKU/product name) *" value={title} onChange={setTitle} placeholder="VD: KusaQuick 500mL new bottle" required/>
       {!project&&<Sel label="Factory type" value={factoryType} onChange={setFactoryType}
         options={[{value:"New",label:"New factory (full process, step 1-9)"},{value:"Existing",label:"Existing factory (step 4-9 only)"}]}/>}
-      {project&&<div style={{fontSize:11,color:"#94a3b8",background:"#f8fafc",padding:"8px 10px",borderRadius:8}}>Factory type: <b>{factoryType}</b> (không thể đổi sau khi tạo, vì checklist đã sinh ra)</div>}
+      {project&&<div style={{fontSize:11,color:"#94a3b8",background:"#f8fafc",padding:"8px 10px",borderRadius:8,marginBottom:10}}>Factory type: <b>{factoryType}</b> (không thể đổi sau khi tạo, vì checklist đã sinh ra)</div>}
+      <div style={g2}>
+        <Inp label="Start date" type="date" value={startDate} onChange={setStartDate}/>
+        <Inp label="Target end date" type="date" value={targetEndDate} onChange={setTargetEndDate}/>
+      </div>
     </Modal>
   );
 }
@@ -733,6 +740,23 @@ function DevProjectCard({project,suppliers,onOpen}){
   const doneSteps=activeSteps.filter(s=>s.status==="Done");
   const rate=activeSteps.length?Math.round((doneSteps.length/activeSteps.length)*100):0;
   const overdueSteps=activeSteps.filter(s=>s.status!=="Done"&&s.dueDate&&daysLeft(s.dueDate)<0);
+  const nextStep=activeSteps.find(s=>s.status!=="Done");
+  const isProjectDone=activeSteps.length>0&&doneSteps.length===activeSteps.length;
+
+  // actual days elapsed
+  let actualDays=null;
+  if(project.startDate){
+    if(isProjectDone){
+      const allComments=activeSteps.flatMap(s=>s.comments||[]);
+      const lastTs=allComments.length?Math.max(...allComments.map(c=>new Date(c.ts).getTime())):null;
+      if(lastTs)actualDays=Math.ceil((lastTs-new Date(project.startDate).getTime())/86400000);
+    }else{
+      actualDays=Math.ceil((new Date()-new Date(project.startDate))/86400000);
+    }
+  }
+  const targetDays=project.startDate&&project.targetEndDate
+    ?Math.ceil((new Date(project.targetEndDate)-new Date(project.startDate))/86400000):null;
+
   return(
     <div onClick={()=>onOpen(project)}
       style={{background:"white",border:`1px solid ${overdueSteps.length>0?"#fecaca":"#f1f5f9"}`,borderRadius:12,padding:14,cursor:"pointer",marginBottom:8}}>
@@ -743,10 +767,29 @@ function DevProjectCard({project,suppliers,onOpen}){
         </div>
         <span style={{fontSize:10,background:project.status==="Done"?"#dcfce7":"#dbeafe",color:project.status==="Done"?"#15803d":"#1d4ed8",padding:"2px 8px",borderRadius:20,flexShrink:0}}>{project.status}</span>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <div style={{flex:1,background:"#f1f5f9",borderRadius:4,height:5}}><div style={{background:"#818cf8",height:5,borderRadius:4,width:`${rate}%`}}/></div>
-        <span style={{fontSize:11,color:"#94a3b8"}}>{doneSteps.length}/{activeSteps.length} · {rate}%</span>
+
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+        <div style={{flex:1,background:"#f1f5f9",borderRadius:6,height:8}}><div style={{background:rate===100?"#4ade80":"#818cf8",height:8,borderRadius:6,width:`${rate}%`,transition:"width .3s"}}/></div>
+        <span style={{fontSize:12,fontWeight:600,color:"#1e293b",width:36,textAlign:"right"}}>{rate}%</span>
       </div>
+      <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>{doneSteps.length}/{activeSteps.length} steps done</div>
+
+      {nextStep&&(
+        <div style={{background:"#eef2ff",borderRadius:8,padding:"6px 10px",marginBottom:8}}>
+          <div style={{fontSize:10,color:"#6366f1",fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Next step</div>
+          <div style={{fontSize:12,color:"#3730a3",marginTop:1}}>{nextStep.no} · {nextStep.title}</div>
+        </div>
+      )}
+
+      <div style={{display:"flex",gap:14,fontSize:11,color:"#94a3b8",flexWrap:"wrap"}}>
+        {project.startDate&&<span>📅 Start: {formatDate(project.startDate)}</span>}
+        {project.targetEndDate&&<span>🎯 Target: {formatDate(project.targetEndDate)}{targetDays!==null&&` (${targetDays}d)`}</span>}
+      </div>
+      {actualDays!==null&&(
+        <div style={{fontSize:11,color:isProjectDone?"#15803d":"#4f46e5",marginTop:4,fontWeight:500}}>
+          ⏱ {isProjectDone?"Hoàn thành sau":"Đã chạy"} {actualDays} ngày{targetDays!==null&&!isProjectDone&&actualDays>targetDays&&<span style={{color:"#ef4444"}}> (vượt {actualDays-targetDays}d so với target)</span>}
+        </div>
+      )}
       {overdueSteps.length>0&&<div style={{fontSize:10,color:"#ef4444",marginTop:6}}>🔴 {overdueSteps.length} step overdue</div>}
     </div>
   );
@@ -848,7 +891,7 @@ function App(){
 
   async function handleSaveDevProject(p){
     const exists=devProjects.find(x=>x.id===p.id);
-    const row={id:p.id,supplier_id:p.supplierId,title:p.title,factory_type:p.factoryType,status:p.status,steps:p.steps};
+    const row={id:p.id,supplier_id:p.supplierId,title:p.title,factory_type:p.factoryType,status:p.status,steps:p.steps,start_date:p.startDate||"",target_end_date:p.targetEndDate||"",group_due_dates:p.groupDueDates||{}};
     if(exists)await dbUpdate("dev_projects",p.id,row);else await dbInsert("dev_projects",row);
     await reload();setDevProjectModal(null);
     setViewDevProject(v=>v&&v.id===p.id?{...v,...p}:v);
