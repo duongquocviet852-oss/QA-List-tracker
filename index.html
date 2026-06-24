@@ -59,7 +59,7 @@ const STEP_TEMPLATE_NEW=[
 const STEP_TEMPLATE_EXISTING=STEP_TEMPLATE_NEW.filter(s=>["4","5","6","7","8","9"].includes(s.group));
 function makeSteps(factoryType){
   const tpl=factoryType==="New"?STEP_TEMPLATE_NEW:STEP_TEMPLATE_EXISTING;
-  return tpl.map(s=>({id:uid(),group:s.group,no:s.no,title:s.title,status:"New",dueDate:"",note:"",remark:"",evidenceUrl:"",updatedAt:"",skipped:false}));
+  return tpl.map(s=>({id:uid(),group:s.group,no:s.no,title:s.title,status:"New",dueDate:"",comments:[],skipped:false}));
 }
 function mapDevProject(p){return{id:p.id,supplierId:p.supplier_id,title:p.title,factoryType:p.factory_type||"New",status:p.status||"In Progress",steps:p.steps||[],createdAt:p.created_at}}
 
@@ -502,61 +502,115 @@ function BulkBar({count,onStatusChange,onClear}){
 
 function StepRow({step,onUpdate,onDelete}){
   const[expanded,setExpanded]=useState(false);
+  const[localDue,setLocalDue]=useState(step.dueDate);
+  const[newNote,setNewNote]=useState("");
+  const[newEvidence,setNewEvidence]=useState("");
+  const[editingId,setEditingId]=useState(null);
+  const[editText,setEditText]=useState("");
+  const[editEvidence,setEditEvidence]=useState("");
   const dl=daysLeft(step.dueDate);
   const isOverdue=step.status!=="Done"&&!step.skipped&&dl!==null&&dl<0;
   const STEP_STATUS_COLOR={"New":"#f1f5f9;color:#475569","In Progress":"#dbeafe;color:#1d4ed8","Pending":"#fef3c7;color:#b45309","Done":"#dcfce7;color:#15803d"};
+  const comments=step.comments||[];
+
+  function saveDueDate(){if(localDue!==step.dueDate)onUpdate({...step,dueDate:localDue})}
+  function addComment(){
+    if(!newNote.trim())return;
+    const c={id:uid(),text:newNote.trim(),evidenceUrl:newEvidence.trim(),ts:new Date().toISOString()};
+    onUpdate({...step,comments:[...comments,c]});
+    setNewNote("");setNewEvidence("");
+  }
+  function startEdit(c){setEditingId(c.id);setEditText(c.text);setEditEvidence(c.evidenceUrl||"")}
+  function saveEdit(c){
+    const newComments=comments.map(x=>x.id===c.id?{...x,text:editText,evidenceUrl:editEvidence}:x);
+    onUpdate({...step,comments:newComments});
+    setEditingId(null);
+  }
+  function deleteComment(id){
+    if(!confirm("Delete this update?"))return;
+    onUpdate({...step,comments:comments.filter(c=>c.id!==id)});
+  }
+
   return(
     <div style={{border:`1px solid ${isOverdue?"#fecaca":"#f1f5f9"}`,borderRadius:8,marginBottom:6,opacity:step.skipped?0.5:1}}>
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setExpanded(!expanded)}>
         <span style={{fontSize:11,color:"#94a3b8",width:32,flexShrink:0}}>{step.no}</span>
-        <select value={step.status} onClick={e=>e.stopPropagation()} onChange={e=>onUpdate({...step,status:e.target.value,updatedAt:new Date().toISOString()})}
+        <select value={step.status} onClick={e=>e.stopPropagation()} onChange={e=>onUpdate({...step,status:e.target.value})}
           style={{...Object.fromEntries(STEP_STATUS_COLOR[step.status].split(";").map(s=>s.split(":").map(x=>x.trim()))),border:"none",borderRadius:8,padding:"2px 6px",fontSize:10,fontWeight:600,cursor:"pointer",outline:"none",flexShrink:0}}>
           {STATUSES.map(s=><option key={s}>{s}</option>)}
         </select>
         <span style={{flex:1,fontSize:12,color:step.skipped?"#94a3b8":"#1e293b",textDecoration:step.skipped?"line-through":"none"}}>{step.title}</span>
         {step.dueDate&&<span style={{fontSize:10,color:isOverdue?"#ef4444":"#94a3b8",flexShrink:0}}>{formatDate(step.dueDate)}</span>}
-        {step.evidenceUrl&&<span style={{fontSize:10,flexShrink:0}}>📎</span>}
+        {comments.length>0&&<span style={{fontSize:10,color:"#94a3b8",flexShrink:0}}>💬{comments.length}</span>}
         <span style={{fontSize:10,color:"#cbd5e1",flexShrink:0}}>{expanded?"▲":"▼"}</span>
       </div>
       {expanded&&(
-        <div style={{padding:"10px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+        <div style={{padding:"10px",borderTop:"1px solid #f1f5f9",background:"#f8fafc"}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
             <div>
               <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Due date</label>
-              <input type="date" value={step.dueDate} onChange={e=>onUpdate({...step,dueDate:e.target.value})}
-                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+              <div style={{display:"flex",gap:6}}>
+                <input type="date" value={localDue} onChange={e=>setLocalDue(e.target.value)}
+                  style={{flex:1,border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+                {localDue!==step.dueDate&&<Btn small onClick={saveDueDate}>Save</Btn>}
+              </div>
             </div>
-            <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+            <div style={{display:"flex",alignItems:"flex-end"}}>
               <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#64748b",cursor:"pointer"}}>
                 <input type="checkbox" checked={step.skipped} onChange={e=>onUpdate({...step,skipped:e.target.checked})} style={{accentColor:"#94a3b8"}}/>
                 Skip / Not applicable
               </label>
             </div>
           </div>
-          <div style={{marginBottom:8}}>
-            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Update note</label>
-            <textarea rows={2} value={step.note} onChange={e=>onUpdate({...step,note:e.target.value,updatedAt:new Date().toISOString()})}
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box",resize:"vertical"}}/>
+
+          <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Timeline</div>
+          {comments.length===0
+            ?<div style={{fontSize:12,color:"#cbd5e1",marginBottom:10}}>No updates yet.</div>
+            :<div style={{marginBottom:10}}>
+              {[...comments].reverse().map(c=>(
+                <div key={c.id} style={{background:"white",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 8px",marginBottom:6}}>
+                  {editingId===c.id?(
+                    <div>
+                      <textarea rows={2} value={editText} onChange={e=>setEditText(e.target.value)}
+                        style={{width:"100%",border:"1px solid #c7d2fe",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box",marginBottom:4,resize:"vertical"}}/>
+                      <input value={editEvidence} onChange={e=>setEditEvidence(e.target.value)} placeholder="Evidence URL..."
+                        style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:11,outline:"none",boxSizing:"border-box",marginBottom:4}}/>
+                      <div style={{display:"flex",gap:6}}>
+                        <Btn small onClick={()=>saveEdit(c)}>Save</Btn>
+                        <Btn small variant="secondary" onClick={()=>setEditingId(null)}>Cancel</Btn>
+                      </div>
+                    </div>
+                  ):(<>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+                      <span style={{fontSize:10,color:"#94a3b8"}}>{new Date(c.ts).toLocaleString("vi-VN")}</span>
+                      <div style={{display:"flex",gap:4,flexShrink:0}}>
+                        <button onClick={()=>startEdit(c)} style={{fontSize:10,color:"#94a3b8",background:"white",border:"1px solid #e2e8f0",borderRadius:6,padding:"1px 6px",cursor:"pointer"}}>Edit</button>
+                        <button onClick={()=>deleteComment(c.id)} style={{fontSize:10,color:"#ef4444",background:"white",border:"1px solid #fecaca",borderRadius:6,padding:"1px 6px",cursor:"pointer"}}>Del</button>
+                      </div>
+                    </div>
+                    <div style={{fontSize:12,color:"#334155",marginTop:3,lineHeight:1.5}}>{c.text}</div>
+                    {c.evidenceUrl&&(
+                      <div style={{marginTop:5}}>
+                        {/\.(jpg|jpeg|png|gif|webp)/i.test(c.evidenceUrl)
+                          ?<img src={c.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:100}} onError={e=>{e.target.style.display="none"}}/>
+                          :<a href={c.evidenceUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#4f46e5"}}>🔗 View evidence</a>
+                        }
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              ))}
+            </div>
+          }
+
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:8}}>
+            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Add update</label>
+            <textarea rows={2} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Mô tả tiến độ..."
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box",resize:"vertical",marginBottom:4}}/>
+            <input value={newEvidence} onChange={e=>setNewEvidence(e.target.value)} placeholder="Evidence link (optional)..."
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box",marginBottom:6}}/>
+            <Btn small onClick={addComment} disabled={!newNote.trim()}>+ Add update</Btn>
           </div>
-          <div style={{marginBottom:8}}>
-            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Remark</label>
-            <input value={step.remark} onChange={e=>onUpdate({...step,remark:e.target.value})}
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-          </div>
-          <div style={{marginBottom:8}}>
-            <label style={{fontSize:10,color:"#94a3b8",display:"block",marginBottom:3}}>Evidence (link/ảnh)</label>
-            <input value={step.evidenceUrl} onChange={e=>onUpdate({...step,evidenceUrl:e.target.value})} placeholder="https://drive.google.com/..."
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-            {step.evidenceUrl&&(
-              <div style={{marginTop:6}}>
-                {/\.(jpg|jpeg|png|gif|webp)/i.test(step.evidenceUrl)
-                  ?<img src={step.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:100}} onError={e=>{e.target.style.display="none"}}/>
-                  :<a href={step.evidenceUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#4f46e5"}}>🔗 View evidence</a>
-                }
-              </div>
-            )}
-          </div>
-          {step.updatedAt&&<div style={{fontSize:10,color:"#cbd5e1"}}>Last updated: {new Date(step.updatedAt).toLocaleString("vi-VN")}</div>}
         </div>
       )}
     </div>
@@ -960,6 +1014,29 @@ function App(){
 
             {/* Dashboard — only active (non-Done) tasks */}
             {view==="dashboard"&&!selectedSupplier&&<>
+              <div style={{fontWeight:700,fontSize:13,color:"#4f46e5",marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Development</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                {(()=>{
+                  const allSteps=devProjects.flatMap(p=>p.steps.map(s=>({...s,projectId:p.id})));
+                  const activeSteps=allSteps.filter(s=>!s.skipped&&s.status!=="Done");
+                  const doneSteps=allSteps.filter(s=>!s.skipped&&s.status==="Done");
+                  const overdueSteps=activeSteps.filter(s=>s.dueDate&&daysLeft(s.dueDate)<0);
+                  const rate=allSteps.filter(s=>!s.skipped).length?Math.round((doneSteps.length/allSteps.filter(s=>!s.skipped).length)*100):0;
+                  return[
+                    ["Projects",devProjects.length,"#475569","#f8fafc","#e2e8f0"],
+                    ["Active steps",activeSteps.length,"#1d4ed8","#eff6ff","#bfdbfe"],
+                    ["Overdue steps",overdueSteps.length,overdueSteps.length>0?"#dc2626":"#cbd5e1",overdueSteps.length>0?"#fff5f5":"#f8fafc",overdueSteps.length>0?"#fecaca":"#f1f5f9"],
+                    ["Completion",rate+"%","#4338ca","#eef2ff","#c7d2fe"],
+                  ].map(([l,v,tc,bg,border])=>(
+                    <div key={l} style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:"10px 12px"}}>
+                      <div style={{fontSize:20,fontWeight:700,color:tc}}>{v}</div>
+                      <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{l}</div>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              <div style={{fontWeight:700,fontSize:13,color:"#4f46e5",marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>QC</div>
               <KPIBar tasks={tasks}/>
               {overdueAll.length>0&&(
                 <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px",marginBottom:12}}>
