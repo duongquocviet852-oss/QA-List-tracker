@@ -88,7 +88,7 @@ function mapTask(t){return{
   owner:t.owner||"",factoryOwner:t.factory_owner||"",
   manufactory:t.manufactory||"",category:t.category||"",issueNo:t.issue_no||"",
   itemJp:t.item_jp||"",itemEn:t.item_en||"",occurProcess:t.occur_process||"",
-  productName:t.product_name||"",cause:t.cause||"",requestFromCainz:t.request_from_cainz||"",
+  productName:t.product_name||"",cause:t.cause||"",requestFromCainz:t.request_from_cainz||"",issuePhoto:t.issue_photo||"",
   startDate:t.start_date||"",dueDate:t.due_date||"",progress:t.progress||0,
   subtasks:t.subtasks||[],comments:t.comments||[],createdAt:t.created_at
 }}
@@ -148,7 +148,7 @@ function LightboxImg({src,style,className}){
 function Modal({title,onClose,children,footer,wide}){
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16,overflowY:"auto"}}>
-      <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:wide?720:580,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+      <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:wide?1000:580,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"white",zIndex:1}}>
           <span style={{fontWeight:600,color:"#1e293b",fontSize:14}}>{title}</span>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:"#94a3b8",cursor:"pointer",lineHeight:1}}>×</button>
@@ -220,7 +220,7 @@ function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
   const sId=defaultSupplierId||suppliers[0]?.id||"";
   const supplierTasks=tasks?tasks.filter(t=>t.supplierId===sId):[];
   const maxNo=supplierTasks.reduce((max,t)=>Math.max(max,parseInt(t.issueNo)||0),0);
-  const blank={id:uid(),supplierId:sId,partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:String(maxNo+1),itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
+  const blank={id:uid(),supplierId:sId,partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:String(maxNo+1),itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",issuePhoto:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
   const[form,setForm]=useState(task?{...task}:blank);
   const[saving,setSaving]=useState(false);
   function set(k,v){setForm(f=>({...f,[k]:v}))}
@@ -274,6 +274,12 @@ function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
           <Inp label="Item (JP)" value={form.itemJp} onChange={v=>set("itemJp",v)} placeholder="日本語の説明..."/>
           <Inp label="Request from Cainz" value={form.requestFromCainz} onChange={v=>set("requestFromCainz",v)} placeholder="Yêu cầu từ Cainz..." rows={4}/>
           <Inp label="Cause of defect" value={form.cause} onChange={v=>set("cause",v)} placeholder="Nguyên nhân..." rows={3}/>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:3}}>Issue photo (URL / Drive link)</label>
+            <input value={form.issuePhoto||""} onChange={e=>set("issuePhoto",e.target.value)} placeholder="https://drive.google.com/..."
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+            {form.issuePhoto&&<div style={{marginTop:6}}><LightboxImg src={form.issuePhoto}/></div>}
+          </div>
         </div>
       </div>
     </Modal>
@@ -476,7 +482,7 @@ function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate,onEditComm
       {task.requestFromCainz&&(
         <div style={{marginBottom:12}}>
           <div style={{fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Request from Cainz</div>
-          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1e3a8a",lineHeight:1.6}}>{task.requestFromCainz}</div>
+          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1e3a8a",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{task.requestFromCainz}</div>
         </div>
       )}
 
@@ -484,7 +490,14 @@ function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate,onEditComm
       {task.cause&&(
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Cause of defect</div>
-          <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#991b1b",lineHeight:1.6}}>{task.cause}</div>
+          <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#991b1b",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{task.cause}</div>
+        </div>
+      )}
+
+      {task.issuePhoto&&(
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"#94a3b8",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Issue photo</div>
+          <LightboxImg src={task.issuePhoto} style={{maxHeight:200,borderRadius:8}}/>
         </div>
       )}
 
@@ -1049,7 +1062,7 @@ function App(){
     const row={id:t.id,factory_id:t.supplierId,partner:t.partner,title:t.title,type:t.type,status:t.status,priority:t.priority,
       owner:t.owner,factory_owner:t.factoryOwner||"",manufactory:t.manufactory||"",category:t.category||"",
       issue_no:t.issueNo||"",item_jp:t.itemJp||"",item_en:t.itemEn||"",occur_process:t.occurProcess||"",
-      product_name:t.productName||"",cause:t.cause||"",request_from_cainz:t.requestFromCainz||"",
+      product_name:t.productName||"",cause:t.cause||"",request_from_cainz:t.requestFromCainz||"",issue_photo:t.issuePhoto||"",
       start_date:t.startDate||null,due_date:t.dueDate||null,progress:t.progress,subtasks:t.subtasks,comments:t.comments};
     if(exists)await dbUpdate("tasks",t.id,row);else await dbInsert("tasks",row);
     await reload();setTaskModal(null);
