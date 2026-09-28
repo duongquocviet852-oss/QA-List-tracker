@@ -280,53 +280,126 @@ function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
   );
 }
 
+function StructuredCommentForm({status,onSubmit,onCancel,saving}){
+  const isDone=status==="Done";
+  const[action,setAction]=useState("");
+  const[actionJp,setActionJp]=useState("");
+  const[result,setResult]=useState("");
+  const[resultJp,setResultJp]=useState("");
+  const[nextStep,setNextStep]=useState("");
+  const[nextStepJp,setNextStepJp]=useState("");
+  const[closing,setClosing]=useState("");
+  const[closingJp,setClosingJp]=useState("");
+  const[evidenceUrl,setEvidenceUrl]=useState("");
+  const[showJp,setShowJp]=useState(false);
+  const ta={width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box",resize:"vertical"};
+  const lbl={fontSize:11,color:"#94a3b8",display:"block",marginBottom:3};
+  const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10};
+  const canSave=action.trim()||(isDone&&closing.trim());
+
+  function buildText(){
+    const lines=[];
+    if(action.trim()){lines.push(`[Action] ${action.trim()}`);if(actionJp.trim())lines.push(`[対応内容] ${actionJp.trim()}`);}
+    if(result.trim()){lines.push(`[Result] ${result.trim()}`);if(resultJp.trim())lines.push(`[結果] ${resultJp.trim()}`);}
+    if(!isDone&&nextStep.trim()){lines.push(`[Next step] ${nextStep.trim()}`);if(nextStepJp.trim())lines.push(`[次のステップ] ${nextStepJp.trim()}`);}
+    if(isDone&&closing.trim()){lines.push(`[Closing summary] ${closing.trim()}`);if(closingJp.trim())lines.push(`[クロージングまとめ] ${closingJp.trim()}`);}
+    return lines.join("\n");
+  }
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <span style={{fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.5}}>Update details</span>
+        <button onClick={()=>setShowJp(!showJp)}
+          style={{fontSize:11,padding:"3px 10px",border:"1px solid #e2e8f0",borderRadius:20,background:showJp?"#4f46e5":"white",color:showJp?"white":"#64748b",cursor:"pointer"}}>
+          {showJp?"− JP":"+ JP"}
+        </button>
+      </div>
+
+      <div style={{marginBottom:10}}>
+        <label style={lbl}>Action taken <span style={{color:"#ef4444"}}>*</span></label>
+        {showJp?<div style={g2}>
+          <textarea rows={3} value={action} onChange={e=>setAction(e.target.value)} placeholder="What was done (EN/VN)..." style={ta}/>
+          <textarea rows={3} value={actionJp} onChange={e=>setActionJp(e.target.value)} placeholder="対応内容（日本語）..." style={ta}/>
+        </div>:<textarea rows={3} value={action} onChange={e=>setAction(e.target.value)} placeholder="What was done (EN/VN)..." style={{...ta,marginBottom:0}}/>}
+      </div>
+
+      <div style={{marginBottom:10}}>
+        <label style={lbl}>Result / Finding</label>
+        {showJp?<div style={g2}>
+          <textarea rows={2} value={result} onChange={e=>setResult(e.target.value)} placeholder="Outcome, measurement, finding..." style={ta}/>
+          <textarea rows={2} value={resultJp} onChange={e=>setResultJp(e.target.value)} placeholder="結果・所見（日本語）..." style={ta}/>
+        </div>:<textarea rows={2} value={result} onChange={e=>setResult(e.target.value)} placeholder="Outcome, measurement, finding..." style={{...ta,marginBottom:0}}/>}
+      </div>
+
+      {!isDone&&<div style={{marginBottom:10}}>
+        <label style={lbl}>Next step</label>
+        {showJp?<div style={g2}>
+          <textarea rows={2} value={nextStep} onChange={e=>setNextStep(e.target.value)} placeholder="What needs to happen next..." style={ta}/>
+          <textarea rows={2} value={nextStepJp} onChange={e=>setNextStepJp(e.target.value)} placeholder="次のステップ（日本語）..." style={ta}/>
+        </div>:<textarea rows={2} value={nextStep} onChange={e=>setNextStep(e.target.value)} placeholder="What needs to happen next..." style={{...ta,marginBottom:0}}/>}
+      </div>}
+
+      {isDone&&<div style={{marginBottom:10,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"10px 12px"}}>
+        <label style={{...lbl,color:"#15803d"}}>Closing summary <span style={{color:"#ef4444"}}>*</span></label>
+        {showJp?<div style={g2}>
+          <textarea rows={2} value={closing} onChange={e=>setClosing(e.target.value)} placeholder="Brief summary of this issue from start to close..." style={ta}/>
+          <textarea rows={2} value={closingJp} onChange={e=>setClosingJp(e.target.value)} placeholder="クロージングまとめ（日本語）..." style={ta}/>
+        </div>:<textarea rows={2} value={closing} onChange={e=>setClosing(e.target.value)} placeholder="Brief summary of this issue from start to close..." style={{...ta,marginBottom:0}}/>}
+      </div>}
+
+      <div style={{marginBottom:10}}>
+        <label style={lbl}>Evidence (link / image URL)</label>
+        <input value={evidenceUrl} onChange={e=>setEvidenceUrl(e.target.value)} placeholder="https://drive.google.com/..."
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+        {evidenceUrl&&<div style={{marginTop:6}}><LightboxImg src={evidenceUrl}/></div>}
+      </div>
+
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+        <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
+        <Btn onClick={()=>onSubmit(buildText(),evidenceUrl)} disabled={!canSave||saving}>{saving?"Saving...":"Save update"}</Btn>
+      </div>
+    </div>
+  );
+}
+
 function QuickUpdateModal({task,onSave,onClose}){
   const[progress,setProgress]=useState(task.progress);
   const[dueDate,setDueDate]=useState(task.dueDate||"");
   const[status,setStatus]=useState(task.status);
-  const[note,setNote]=useState("");
-  const[evidenceUrl,setEvidenceUrl]=useState("");
   const[saving,setSaving]=useState(false);
-  const isImg=url=>url&&(url.includes("drive.google.com")||/\.(jpg|jpeg|png|gif|webp)/i.test(url));
 
-  async function save(){
-    if(!note.trim())return;
+  async function handleSubmit(text,evidenceUrl){
     setSaving(true);
-    const newComment={id:uid(),text:note.trim(),progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
-    const updated={...task,progress,dueDate,status,comments:[...task.comments,newComment]};
+    const isDelayed=task.dueDate&&dueDate&&new Date(dueDate)>new Date(task.dueDate);
+    const newDelayCount=(task.delayCount||0)+(isDelayed?1:0);
+    const finalText=isDelayed?`${text}\n[⚠ Deadline extended: ${task.dueDate} → ${dueDate}]`:text;
+    const newComment={id:uid(),text:finalText,progress,dueDate,status,evidenceUrl,ts:new Date().toISOString()};
+    const updated={...task,progress,dueDate,status,delayCount:newDelayCount,comments:[...task.comments,newComment]};
     await onSave(updated);
     setSaving(false);
   }
   const g3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10};
   return(
-    <Modal title={"+ Update: "+task.title} onClose={onClose} wide
-      footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!note.trim()||saving}>{saving?"Saving...":"Save update"}</Btn></>}>
+    <Modal title={"+ Update: "+task.title} onClose={onClose} wide footer={null}>
       <div style={g3}>
         <Inp label="Progress %" type="number" value={progress} onChange={v=>setProgress(Number(v))}/>
         <Inp label="New due date" type="date" value={dueDate} onChange={setDueDate}/>
         <Sel label="Status" value={status} onChange={setStatus} options={STATUSES}/>
       </div>
-      <Inp label="Update note *" value={note} onChange={setNote} placeholder="Mô tả tiến độ, action, kết quả..." rows={3}/>
-      <Inp label="Evidence (Google Drive link hoặc URL ảnh)" value={evidenceUrl} onChange={setEvidenceUrl} placeholder="https://drive.google.com/..."/>
-      {evidenceUrl&&(
-        <div style={{marginTop:8,marginBottom:12}}>
-          <LightboxImg src={evidenceUrl}/>
-        </div>
-      )}
       {task.comments.length>0&&<>
-        <div style={{fontSize:11,color:"#94a3b8",margin:"12px 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Previous updates</div>
-        <div style={{maxHeight:180,overflowY:"auto"}}>
+        <div style={{fontSize:11,color:"#94a3b8",margin:"8px 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Previous updates</div>
+        <div style={{maxHeight:160,overflowY:"auto",marginBottom:12}}>
           {[...task.comments].reverse().map(c=>(
-            <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"8px 10px",marginBottom:6,borderLeft:"3px solid #818cf8"}}>
+            <div key={c.id} style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px",marginBottom:5,borderLeft:"3px solid #818cf8"}}>
               <div style={{fontSize:10,color:"#94a3b8",marginBottom:3}}>{new Date(c.ts).toLocaleString("vi-VN")} · {c.progress}% · {c.status}</div>
-              <div style={{fontSize:12,color:"#334155",lineHeight:1.5}}>{c.text}</div>
-              {c.evidenceUrl&&(
-                <a href={c.evidenceUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#4f46e5",marginTop:4,display:"inline-block"}}>🔗 Evidence</a>
-              )}
+              <div style={{fontSize:12,color:"#334155",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{c.text}</div>
+              {c.evidenceUrl&&<div style={{marginTop:4}}><LightboxImg src={c.evidenceUrl} style={{maxHeight:80}}/></div>}
             </div>
           ))}
         </div>
       </>}
+      <StructuredCommentForm status={status} onSubmit={handleSubmit} onCancel={onClose} saving={saving}/>
     </Modal>
   );
 }
@@ -447,7 +520,7 @@ function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate,onEditComm
                     </div>
                   </div>
                 ):(<>
-                  <div style={{fontSize:13,color:"#334155",lineHeight:1.6,marginBottom:c.evidenceUrl?8:0}}>{c.text}</div>
+                  <div style={{fontSize:13,color:"#334155",lineHeight:1.6,marginBottom:c.evidenceUrl?8:0,whiteSpace:"pre-wrap"}}>{c.text}</div>
                   {c.evidenceUrl&&(
                     <div style={{marginTop:6}}>
                       <LightboxImg src={c.evidenceUrl} style={{maxHeight:120}}/>
@@ -624,7 +697,7 @@ function StepRow({step,onUpdate,onDelete}){
                         <button onClick={()=>deleteComment(c.id)} style={{fontSize:10,color:"#ef4444",background:"white",border:"1px solid #fecaca",borderRadius:6,padding:"1px 6px",cursor:"pointer"}}>Del</button>
                       </div>
                     </div>
-                    <div style={{fontSize:12,color:"#334155",marginTop:3,lineHeight:1.5}}>{c.text}</div>
+                    <div style={{fontSize:12,color:"#334155",marginTop:3,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{c.text}</div>
                     {c.evidenceUrl&&(
                       <div style={{marginTop:5}}>
                         <LightboxImg src={c.evidenceUrl} style={{maxHeight:100}}/>
