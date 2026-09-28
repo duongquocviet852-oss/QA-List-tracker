@@ -220,7 +220,8 @@ function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
   const sId=defaultSupplierId||suppliers[0]?.id||"";
   const supplierTasks=tasks?tasks.filter(t=>t.supplierId===sId):[];
   const maxNo=supplierTasks.reduce((max,t)=>Math.max(max,parseInt(t.issueNo)||0),0);
-  const blank={id:uid(),supplierId:sId,partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:String(maxNo+1),  const[form,setForm]=useState(task?{...task}:blank);
+  const blank={id:uid(),supplierId:sId,partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:String(maxNo+1),itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
+  const[form,setForm]=useState(task?{...task}:blank);
   const[saving,setSaving]=useState(false);
   function set(k,v){setForm(f=>({...f,[k]:v}))}
   async function save(){setSaving(true);await onSave(form);setSaving(false)}
