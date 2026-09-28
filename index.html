@@ -130,7 +130,7 @@ function Lightbox(){
 }
 
 function LightboxImg({src,style,className}){
-  const isImg=/\.(jpg|jpeg|png|gif|webp)/i.test(src)||src?.includes("drive.google.com");
+  const isImg=/\.(jpg|jpeg|png|gif|webp)/i.test(src);
   if(!isImg)return(
     <a href={src} target="_blank" rel="noreferrer"
       style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"5px 10px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff",textDecoration:"none"}}>
