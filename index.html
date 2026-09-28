@@ -278,7 +278,7 @@ function TaskModal({task,suppliers,tasks,defaultSupplierId,onSave,onClose}){
             <label style={{fontSize:11,color:"#94a3b8",display:"block",marginBottom:3}}>Issue photo (URL / Drive link)</label>
             <input value={form.issuePhoto||""} onChange={e=>set("issuePhoto",e.target.value)} placeholder="https://drive.google.com/..."
               style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
-            {form.issuePhoto&&<div style={{marginTop:6}}><LightboxImg src={form.issuePhoto}/></div>}
+            {form.issuePhoto&&form.issuePhoto.length>10&&<div style={{marginTop:6}}><LightboxImg src={form.issuePhoto}/></div>}
           </div>
         </div>
       </div>
