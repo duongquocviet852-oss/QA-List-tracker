@@ -13,7 +13,12 @@
 <style>
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 select{appearance:none;-webkit-appearance:none}
-.img-preview{width:100%;max-height:160px;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc}
+.img-preview{width:100%;max-height:160px;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;transition:opacity .15s}
+.img-preview:hover{opacity:.85}
+.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out}
+.lightbox-img{max-width:92vw;max-height:92vh;object-fit:contain;border-radius:4px;box-shadow:0 0 60px rgba(0,0,0,.5)}
+.lightbox-close{position:fixed;top:20px;right:24px;color:white;font-size:32px;cursor:pointer;line-height:1;opacity:.8;z-index:10000}
+.lightbox-close:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -100,7 +105,45 @@ function exportCSV(tasks,suppliers){
   const a=document.createElement("a");a.href=url;a.download=`issues_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
-const {useState,useEffect}=React;
+const {useState,useEffect,useCallback}=React;
+
+// Global lightbox state
+let _setLightbox=null;
+function openLightbox(src){if(_setLightbox)_setLightbox(src)}
+
+function Lightbox(){
+  const[src,setSrc]=useState(null);
+  useEffect(()=>{_setLightbox=setSrc;return()=>{_setLightbox=null};},[]);
+  useEffect(()=>{
+    if(!src)return;
+    const esc=e=>{if(e.key==="Escape")setSrc(null)};
+    window.addEventListener("keydown",esc);
+    return()=>window.removeEventListener("keydown",esc);
+  },[src]);
+  if(!src)return null;
+  return(
+    <div className="lightbox-overlay" onClick={()=>setSrc(null)}>
+      <span className="lightbox-close" onClick={()=>setSrc(null)}>×</span>
+      <img className="lightbox-img" src={src} alt="evidence" onClick={e=>e.stopPropagation()}/>
+    </div>
+  );
+}
+
+function LightboxImg({src,style,className}){
+  const isImg=/\.(jpg|jpeg|png|gif|webp)/i.test(src)||src?.includes("drive.google.com");
+  if(!isImg)return(
+    <a href={src} target="_blank" rel="noreferrer"
+      style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"5px 10px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff",textDecoration:"none"}}>
+      🔗 View evidence
+    </a>
+  );
+  return(
+    <img src={src} className={className||"img-preview"} alt="evidence"
+      style={style} onClick={e=>{e.stopPropagation();openLightbox(src)}}
+      onError={e=>{e.target.style.display="none"}}
+      title="Click to enlarge"/>
+  );
+}
 
 function Modal({title,onClose,children,footer,wide}){
   return(
@@ -176,62 +219,60 @@ function SupplierModal({supplier,onSave,onClose}){
 function TaskModal({task,suppliers,defaultSupplierId,onSave,onClose}){
   const blank={id:uid(),supplierId:defaultSupplierId||suppliers[0]?.id||"",partner:"",title:"",type:"Short-term",status:"New",priority:"Medium",owner:"",factoryOwner:"",manufactory:"",category:"",issueNo:"",itemJp:"",itemEn:"",occurProcess:"",productName:"",cause:"",requestFromCainz:"",startDate:"",dueDate:"",progress:0,subtasks:[],comments:[]};
   const[form,setForm]=useState(task?{...task}:blank);
-  const[tab,setTab]=useState("basic");
   const[saving,setSaving]=useState(false);
   function set(k,v){setForm(f=>({...f,[k]:v}))}
   async function save(){setSaving(true);await onSave(form);setSaving(false)}
+  const divider={borderTop:"1px solid #f1f5f9",margin:"14px 0 12px",paddingTop:4};
+  const sectionLabel={fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.5,marginBottom:10,display:"block"};
   const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:10};
   const g3={display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10};
-  const tabs=[["basic","Basic"],["detail","Issue detail"],["people","People & dates"]];
+  const twocol={display:"grid",gridTemplateColumns:"1fr 1fr",gap:16};
   return(
     <Modal title={task?"Edit issue":"New issue"} onClose={onClose} wide
       footer={<><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn onClick={save} disabled={!form.supplierId||!form.title.trim()||saving}>{saving?"Saving...":"Save"}</Btn></>}>
-      <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9",marginBottom:16}}>
-        {tabs.map(([v,l])=>(
-          <button key={v} onClick={()=>setTab(v)}
-            style={{padding:"8px 16px",fontSize:13,border:"none",borderBottom:tab===v?"2px solid #4f46e5":"2px solid transparent",color:tab===v?"#4f46e5":"#94a3b8",background:"none",cursor:"pointer",fontWeight:tab===v?600:400}}>
-            {l}
-          </button>
-        ))}
+      <div style={twocol}>
+        {/* Left column */}
+        <div>
+          <span style={sectionLabel}>Basic info</span>
+          <Sel label="Supplier *" value={form.supplierId} onChange={v=>set("supplierId",v)}
+            options={[{value:"",label:"— chọn supplier —"},...suppliers.map(s=>({value:s.id,label:s.name}))]} required/>
+          <div style={g2}>
+            <Inp label="Manufactory" value={form.manufactory} onChange={v=>set("manufactory",v)} placeholder="Tên nhà máy..."/>
+            <Inp label="Issue No." value={form.issueNo} onChange={v=>set("issueNo",v)} placeholder="56, 57..."/>
+          </div>
+          <Inp label="Title / Issue description *" value={form.title} onChange={v=>set("title",v)} placeholder="Mô tả vấn đề..." required/>
+          <div style={g3}>
+            <Sel label="Type" value={form.type} onChange={v=>set("type",v)} options={TYPES}/>
+            <Sel label="Status" value={form.status} onChange={v=>set("status",v)} options={STATUSES}/>
+            <Sel label="Priority" value={form.priority} onChange={v=>set("priority",v)} options={PRIORITIES}/>
+          </div>
+          <div style={divider}><span style={sectionLabel}>People & dates</span></div>
+          <div style={g2}>
+            <Inp label="Owner" value={form.owner} onChange={v=>set("owner",v)} placeholder="Người phụ trách..."/>
+            <Inp label="Factory owner" value={form.factoryOwner} onChange={v=>set("factoryOwner",v)} placeholder="Phụ trách nhà máy..."/>
+          </div>
+          <div style={g3}>
+            <Inp label="Start date" type="date" value={form.startDate} onChange={v=>set("startDate",v)}/>
+            <Inp label="Due date" type="date" value={form.dueDate} onChange={v=>set("dueDate",v)}/>
+            <Inp label="Progress %" type="number" value={form.progress} onChange={v=>set("progress",Number(v))}/>
+          </div>
+        </div>
+        {/* Right column */}
+        <div>
+          <span style={sectionLabel}>Issue detail</span>
+          <div style={g2}>
+            <Sel label="Category" value={form.category} onChange={v=>set("category",v)} options={["—",...CATEGORIES]}/>
+            <Sel label="Occur process" value={form.occurProcess} onChange={v=>set("occurProcess",v)} options={["—",...PROCESSES]}/>
+          </div>
+          <div style={g2}>
+            <Inp label="Product name" value={form.productName} onChange={v=>set("productName",v)} placeholder="KusaQuick 500mL..."/>
+            <Inp label="Item (EN)" value={form.itemEn} onChange={v=>set("itemEn",v)} placeholder="English description..."/>
+          </div>
+          <Inp label="Item (JP)" value={form.itemJp} onChange={v=>set("itemJp",v)} placeholder="日本語の説明..."/>
+          <Inp label="Request from Cainz" value={form.requestFromCainz} onChange={v=>set("requestFromCainz",v)} placeholder="Yêu cầu từ Cainz..." rows={4}/>
+          <Inp label="Cause of defect" value={form.cause} onChange={v=>set("cause",v)} placeholder="Nguyên nhân..." rows={3}/>
+        </div>
       </div>
-      {tab==="basic"&&<>
-        <Sel label="Supplier *" value={form.supplierId} onChange={v=>set("supplierId",v)}
-          options={[{value:"",label:"— chọn supplier —"},...suppliers.map(s=>({value:s.id,label:s.name}))]} required/>
-        <div style={g2}>
-          <Inp label="Manufactory (nhà máy)" value={form.manufactory} onChange={v=>set("manufactory",v)} placeholder="Tên nhà máy..."/>
-          <Inp label="Issue No." value={form.issueNo} onChange={v=>set("issueNo",v)} placeholder="56, 57..."/>
-        </div>
-        <Inp label="Title / Issue description *" value={form.title} onChange={v=>set("title",v)} placeholder="Mô tả vấn đề..." required/>
-        <div style={g3}>
-          <Sel label="Type" value={form.type} onChange={v=>set("type",v)} options={TYPES}/>
-          <Sel label="Status" value={form.status} onChange={v=>set("status",v)} options={STATUSES}/>
-          <Sel label="Priority" value={form.priority} onChange={v=>set("priority",v)} options={PRIORITIES}/>
-        </div>
-      </>}
-      {tab==="detail"&&<>
-        <div style={g2}>
-          <Sel label="Category" value={form.category} onChange={v=>set("category",v)} options={["—",...CATEGORIES]}/>
-          <Sel label="Occur process" value={form.occurProcess} onChange={v=>set("occurProcess",v)} options={["—",...PROCESSES]}/>
-        </div>
-        <div style={g2}>
-          <Inp label="Product name" value={form.productName} onChange={v=>set("productName",v)} placeholder="KusaQuick 500mL..."/>
-          <Inp label="Item (EN)" value={form.itemEn} onChange={v=>set("itemEn",v)} placeholder="English description..."/>
-        </div>
-        <Inp label="Item (JP)" value={form.itemJp} onChange={v=>set("itemJp",v)} placeholder="日本語の説明..."/>
-        <Inp label="Request from Cainz" value={form.requestFromCainz} onChange={v=>set("requestFromCainz",v)} placeholder="Yêu cầu từ Cainz..." rows={3}/>
-        <Inp label="Cause of defect" value={form.cause} onChange={v=>set("cause",v)} placeholder="Nguyên nhân..." rows={2}/>
-      </>}
-      {tab==="people"&&<>
-        <div style={g2}>
-          <Inp label="Owner (người phụ trách task)" value={form.owner} onChange={v=>set("owner",v)} placeholder="Tên người phụ trách..."/>
-          <Inp label="Factory owner (người phụ trách NM)" value={form.factoryOwner} onChange={v=>set("factoryOwner",v)} placeholder="Tên người phụ trách NM..."/>
-        </div>
-        <div style={g3}>
-          <Inp label="Start date" type="date" value={form.startDate} onChange={v=>set("startDate",v)}/>
-          <Inp label="Due date" type="date" value={form.dueDate} onChange={v=>set("dueDate",v)}/>
-          <Inp label="Progress %" type="number" value={form.progress} onChange={v=>set("progress",Number(v))}/>
-        </div>
-      </>}
     </Modal>
   );
 }
@@ -266,13 +307,7 @@ function QuickUpdateModal({task,onSave,onClose}){
       <Inp label="Evidence (Google Drive link hoặc URL ảnh)" value={evidenceUrl} onChange={setEvidenceUrl} placeholder="https://drive.google.com/..."/>
       {evidenceUrl&&(
         <div style={{marginTop:8,marginBottom:12}}>
-          {isImg(evidenceUrl)
-            ?<img src={evidenceUrl} className="img-preview" alt="evidence" onError={e=>{e.target.style.display="none"}}/>
-            :<a href={evidenceUrl} target="_blank" rel="noreferrer"
-                style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"6px 12px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff"}}>
-                🔗 View evidence
-              </a>
-          }
+          <LightboxImg src={evidenceUrl}/>
         </div>
       )}
       {task.comments.length>0&&<>
@@ -412,13 +447,7 @@ function TaskDetailModal({task,suppliers,onClose,onEdit,onQuickUpdate,onEditComm
                   <div style={{fontSize:13,color:"#334155",lineHeight:1.6,marginBottom:c.evidenceUrl?8:0}}>{c.text}</div>
                   {c.evidenceUrl&&(
                     <div style={{marginTop:6}}>
-                      {/\.(jpg|jpeg|png|gif|webp)/i.test(c.evidenceUrl)
-                        ?<img src={c.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:120}} onError={e=>{e.target.style.display="none"}}/>
-                        :<a href={c.evidenceUrl} target="_blank" rel="noreferrer"
-                            style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#4f46e5",padding:"5px 10px",border:"1px solid #c7d2fe",borderRadius:8,background:"#eef2ff",textDecoration:"none"}}>
-                            🔗 View evidence
-                          </a>
-                      }
+                      <LightboxImg src={c.evidenceUrl} style={{maxHeight:120}}/>
                     </div>
                   )}
                 </>)}
@@ -595,10 +624,7 @@ function StepRow({step,onUpdate,onDelete}){
                     <div style={{fontSize:12,color:"#334155",marginTop:3,lineHeight:1.5}}>{c.text}</div>
                     {c.evidenceUrl&&(
                       <div style={{marginTop:5}}>
-                        {/\.(jpg|jpeg|png|gif|webp)/i.test(c.evidenceUrl)
-                          ?<img src={c.evidenceUrl} className="img-preview" alt="evidence" style={{maxHeight:100}} onError={e=>{e.target.style.display="none"}}/>
-                          :<a href={c.evidenceUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#4f46e5"}}>🔗 View evidence</a>
-                        }
+                        <LightboxImg src={c.evidenceUrl} style={{maxHeight:100}}/>
                       </div>
                     )}
                   </>)}
@@ -1033,7 +1059,7 @@ function App(){
     <div style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
       {/* Header */}
       <div style={{background:"white",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,zIndex:40}}>
-        <div style={{maxWidth:980,margin:"0 auto",padding:"0 16px",display:"flex",alignItems:"center",gap:6,height:50}}>
+        <div style={{maxWidth:1400,margin:"0 auto",padding:"0 16px",display:"flex",alignItems:"center",gap:6,height:50}}>
           <span style={{fontWeight:800,color:"#4f46e5",fontSize:15,marginRight:6}}>ProjectTrack</span>
           <div style={{display:"flex",gap:2,flex:1}}>
             {[["dashboard","Dashboard"],["suppliers","Suppliers"],["issues","All Issues"],["stats","Stats"]].map(([v,l])=>(
@@ -1052,7 +1078,7 @@ function App(){
           </div>
         </div>
         {selectedSupplier&&activeSupplier&&(
-          <div style={{maxWidth:980,margin:"0 auto",padding:"0 16px 8px",display:"flex",alignItems:"center",gap:6,fontSize:13}}>
+          <div style={{maxWidth:1400,margin:"0 auto",padding:"0 16px 8px",display:"flex",alignItems:"center",gap:6,fontSize:13}}>
             <button onClick={()=>{setSelectedSupplier(null);setSelectedIds([]);}} style={{color:"#4f46e5",background:"none",border:"none",cursor:"pointer",padding:0}}>Suppliers</button>
             <span style={{color:"#cbd5e1"}}>›</span>
             <span style={{color:"#334155",fontWeight:600}}>{activeSupplier.name}</span>
@@ -1061,7 +1087,7 @@ function App(){
         )}
       </div>
 
-      <div style={{maxWidth:980,margin:"0 auto",padding:"20px 16px"}}>
+      <div style={{maxWidth:1400,margin:"0 auto",padding:"20px 16px"}}>
         {error&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#dc2626"}}>{error}</div>}
         {loading?(
           <div style={{textAlign:"center",padding:"80px 0",color:"#94a3b8",fontSize:14}}>⏳ Connecting to database...</div>
@@ -1242,7 +1268,7 @@ function App(){
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+ReactDOM.createRoot(document.getElementById("root")).render(<><App/><Lightbox/></>);
 </script>
 </body>
 </html>
